@@ -10,14 +10,17 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE_MODULES = {
     "com_port_manager", "database", "device_manager", "device_profile",
     "findings", "firmware_capture", "hardware_helpers", "packet_analysis",
-    "plugin_loader", "report_generator", "serial_evidence", "test_runner",
+    "plugin_loader", "report_generator", "report_paths", "serial_evidence", "test_runner",
     "test_suite", "theme", "usb_class_mapper",
 }
 
 
 class ProjectLayoutTests(unittest.TestCase):
-    def test_only_entry_point_remains_in_root(self):
-        self.assertEqual({path.name for path in ROOT.glob("*.py")}, {"main.py"})
+    def test_entry_points_and_package_initializer_remain_in_root(self):
+        self.assertEqual(
+            {path.name for path in ROOT.glob("*.py")},
+            {"__init__.py", "main.py", "plugin.py"},
+        )
         self.assertTrue((ROOT / "core" / "__init__.py").is_file())
         self.assertEqual(
             {path.stem for path in (ROOT / "core").glob("*.py")} - {"__init__"},

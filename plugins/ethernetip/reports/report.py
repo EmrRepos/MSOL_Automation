@@ -80,4 +80,6 @@ class ReportGenerator:
         }
 
     def save(self, path: str, report: dict) -> None:
-        Path(path).write_text(json.dumps(report, indent=2, ensure_ascii=True) + '\n', encoding='utf-8')
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(report, indent=2, ensure_ascii=True) + '\n', encoding='utf-8')

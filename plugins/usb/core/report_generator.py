@@ -10,6 +10,7 @@ from xml.sax.saxutils import escape
 
 from datetime import datetime
 from core.packet_analysis import AnalysisResult
+from core.report_paths import REPORT_DIR
 
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -90,10 +91,7 @@ class ReportGenerator:
 
     def __init__(self):
 
-        os.makedirs(
-            "reports",
-            exist_ok=True
-        )
+        REPORT_DIR.mkdir(parents=True, exist_ok=True)
 
     def export_packet_analysis(self, result: AnalysisResult, base: Path, logger):
         """Export local packet evidence as PDF/CSV; report every export failure."""
@@ -200,7 +198,7 @@ class ReportGenerator:
 
     def export_suite(self, result, logger):
         """Replace the latest suite PDF/CSV reports, preserving evidence and outcomes."""
-        base = Path("reports") / "USB_Suite_Validation_Report"
+        base = REPORT_DIR / "USB_Suite_Validation_Report"
         paths = {}
         result["report_paths"] = paths
         rows = result["results"]
@@ -358,7 +356,7 @@ class ReportGenerator:
         )
 
         filename = os.path.join(
-            "reports",
+            REPORT_DIR,
             f"USB_Report_{timestamp}.csv"
         )
 
@@ -415,7 +413,7 @@ class ReportGenerator:
         )
 
         filename = os.path.join(
-            "reports",
+            REPORT_DIR,
             f"USB_Report_{timestamp}.pdf"
         )
 

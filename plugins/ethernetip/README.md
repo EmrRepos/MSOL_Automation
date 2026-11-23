@@ -16,12 +16,21 @@ requirements for this increment. Windows python.org installations normally inclu
 On Linux, install your distribution's Tkinter package if needed.
 
 ```powershell
-python main.py
+.\.venv\Scripts\python.exe launcher.py ethernetip
 ```
+
+Run this command from the repository root. The standalone `python main.py`
+command and CLI examples below are run from `plugins\ethernetip`; the root
+launcher also forwards these CLI arguments, for example
+`.\.venv\Scripts\python.exe launcher.py ethernetip coverage`.
 
 The native desktop window opens directly; there is no web server or browser URL.
 **Load sample** uses a synthetic controller at the documentation address `192.0.2.10`
 and sends no traffic. Sample evidence remains explicitly labeled in exported reports.
+The **Export JSON** dialog defaults to `reports/ethernetip` under the current
+working directory; another destination may be selected. Export is manual.
+CLI reports are saved only when `--output` is supplied; use a path such as
+`reports\ethernetip\assessment.json` to save them in the same folder.
 
 For a real assessment, enter one literal unicast IPv4 address and an operator/scope
 reference. Start a manual assessment, confirm a single identity probe, or select
@@ -242,7 +251,9 @@ needs its own isolated-lab scope, resource limits, instrumentation and recovery 
 ## Verification
 
 ```powershell
+Push-Location plugins\ethernetip
 python -m unittest discover -s tests -v
+Pop-Location
 ```
 
 The tests use synthetic packets and mocked sockets. Native Tkinter UI tests need a

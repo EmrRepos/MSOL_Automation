@@ -43,7 +43,7 @@ class SecurityTests(unittest.TestCase):
                                  'Synthetic data', parse_identity_payload(identity_payload()),
                                  SecurityAssessment())
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / 'report.json'
+            path = Path(directory) / 'reports' / 'ethernetip' / 'report.json'
             generator.save(str(path), report)
             self.assertEqual(json.loads(path.read_text(encoding='utf-8')), report)
         self.assertEqual(report['scope']['mode'], 'sample')

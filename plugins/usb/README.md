@@ -23,7 +23,7 @@ Offline capture analysis does not require connected hardware or USBPcap to be ru
 
 ## 3. Initial Setup
 
-Download or clone this repository, then open PowerShell in its root folder.
+Download or clone this repository, then open PowerShell in the repository root.
 
 ### Create the Python environment
 
@@ -34,19 +34,20 @@ py -3.14 -m venv .venv
 ### Install dependencies
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r plugins\usb\requirements.txt
 .\.venv\Scripts\python.exe -m pip check
 ```
 
 ### Start the application
 
 ```powershell
-.\.venv\Scripts\python.exe main.py
+.\.venv\Scripts\python.exe launcher.py usb
 ```
 
 These commands use the virtual environment directly; activation and PowerShell
-execution-policy changes are not required. Run from the repository root so
-reports, device profiles and history use the expected locations.
+execution-policy changes are not required. Automated reports are saved in
+`reports/usb` under the current working directory, and history uses that
+working directory; device profiles are loaded from this plugin's directory.
 Source execution is the maintained workflow; executable build configuration is
 not maintained.
 
@@ -54,8 +55,8 @@ not maintained.
 
 The UI selects devices and workflows, the runner coordinates plugins and
 hardware access, and the reporting/history components save results. Shared Python
-modules live in the `core` package; only the application entry point remains at
-the root. The startup command is unchanged.
+modules live in the `core` package. The standalone entry point remains
+`main.py`; the repository-level launcher provides another way to start it.
 
 ```text
 USB_Pentest_Framework/
@@ -78,6 +79,7 @@ USB_Pentest_Framework/
 |   |-- firmware_capture.py         # Passive USBPcap recording
 |   |-- packet_analysis.py          # Offline USB packet analysis
 |   |-- report_generator.py         # PDF/CSV exports
+|   |-- report_paths.py             # Default report directory
 |   `-- database.py                 # SQLite history storage
 |-- ui/
 |   |-- main_window.py              # Main application and workflow guards
@@ -112,7 +114,7 @@ USB_Pentest_Framework/
 |   `-- serial_console.py
 |-- device_profiles/                # JSON serial-protocol configuration
 |-- tests/                          # Unit and headless GUI tests
-|-- reports/                        # Generated PDF/CSV reports
+|-- reports/usb/                    # Default PDF/CSV reports, relative to working directory
 |-- logs/                           # Local log files, where used
 |-- usb_tests.db                    # Local SQLite test history
 `-- .github/workflows/ci.yml         # Windows/Python CI
@@ -216,18 +218,19 @@ analysis cannot guarantee detection of every vulnerability.
 - **CSV:** tabular results with labelled evidence for further review.
 - **JSON reports are not generated.** Device-profile JSON remains configuration.
 
-Standard validation saves the following pair in `reports`, replacing the previous
-pair on each run:
+Standard validation saves the following pair in `reports/usb` relative to the
+working directory, replacing the previous pair on each run:
 
 ```text
 USB_Suite_Validation_Report.pdf
 USB_Suite_Validation_Report.csv
 ```
 
-Independent test profiles use timestamped report names. Packet analysis asks for
-an output destination and confirms replacement of existing PDF/CSV reports.
-Older differently named reports are left untouched. Report Center lists PDF/CSV;
-analysis reports saved elsewhere can be opened from their chosen location.
+Independent test profiles use timestamped report names in the same folder.
+Packet analysis defaults to that folder but allows another destination and
+confirms replacement of existing PDF/CSV reports. Older reports are not moved.
+Report Center lists PDF/CSV in `reports/usb`; reports saved elsewhere can be
+opened from their chosen location.
 Export errors are explicitly logged.
 
 ## 8. Test History
@@ -246,7 +249,9 @@ Run the software tests without connected hardware:
 
 ```powershell
 $env:QT_QPA_PLATFORM = "offscreen"
-.\.venv\Scripts\python.exe -B -m unittest discover -s tests -p "test_*.py" -v
+Push-Location plugins\usb
+..\..\.venv\Scripts\python.exe -B -m unittest discover -s tests -p "test_*.py" -v
+Pop-Location
 ```
 
 [Python CI](.github/workflows/ci.yml) runs on pushes, pull requests and manual

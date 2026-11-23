@@ -362,6 +362,35 @@ class AnalysisUITests(unittest.TestCase):
         self.assertIn("Capture SHA256", dialog.evidence.toPlainText())
         self.assertNotIn("TestSecret123", dialog.evidence.toPlainText())
 
+    def test_dialog_defaults_to_usb_report_directory(self):
+        previous = os.getcwd()
+        try:
+            os.chdir(self.root)
+            dialog = Mock()
+            dialog.worker = None
+            dialog.capture_busy.return_value = False
+            dialog.source_box.text.return_value = str(self.source)
+            with patch("ui.packet_analysis_dialog.QFileDialog.getSaveFileName",
+                       return_value=("", "")) as save:
+                PacketAnalysisDialog.start_analysis(dialog)
+            self.assertEqual(Path(save.call_args.args[2]).parent, self.root / "reports" / "usb")
+            self.assertTrue((self.root / "reports" / "usb").is_dir())
+        finally:
+            os.chdir(previous)
+
+    def test_dialog_reports_default_directory_creation_failure(self):
+        dialog = Mock()
+        dialog.worker = None
+        dialog.capture_busy.return_value = False
+        dialog.source_box.text.return_value = str(self.source)
+        with patch("ui.packet_analysis_dialog.REPORT_DIR") as directory, \
+             patch("ui.packet_analysis_dialog.QFileDialog.getSaveFileName") as save:
+            directory.mkdir.side_effect = PermissionError("denied")
+            PacketAnalysisDialog.start_analysis(dialog)
+        dialog.analysis_error.assert_called_once()
+        self.assertIn("denied", dialog.analysis_error.call_args.args[0])
+        save.assert_not_called()
+
     def test_active_capture_is_blocked_and_original_cannot_be_overwritten(self):
         dialog = PacketAnalysisDialog(capture_busy=lambda: True)
         with patch("ui.packet_analysis_dialog.QMessageBox.warning") as warning:

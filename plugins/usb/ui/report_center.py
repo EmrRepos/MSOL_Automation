@@ -2,6 +2,8 @@
 
 import os
 
+from core.report_paths import REPORT_DIR
+
 from PySide6.QtWidgets import (
     QGroupBox,
     QVBoxLayout,
@@ -26,7 +28,7 @@ class ReportCenter(QGroupBox):
             )
         )
 
-        self.reports_dir = os.path.abspath("reports")
+        self.reports_dir = os.path.abspath(REPORT_DIR)
 
         layout = QVBoxLayout()
 

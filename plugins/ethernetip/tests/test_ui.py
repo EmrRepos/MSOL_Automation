@@ -1,5 +1,8 @@
 import tkinter as tk
 import unittest
+import os
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from ui import AssessmentApp
@@ -27,6 +30,31 @@ class UITests(unittest.TestCase):
         self.assertEqual(report['scope']['mode'], 'sample')
         self.assertFalse(report['scope']['authorization_attested'])
         self.assertEqual(report['attack_surface_reviews'][0]['status'], 'Needs review')
+
+    def test_export_defaults_to_ethernetip_folder_and_allows_custom_path(self):
+        self.app.load_sample()
+        with tempfile.TemporaryDirectory() as directory:
+            previous = os.getcwd()
+            try:
+                os.chdir(directory)
+                custom_path = Path(directory) / 'custom.json'
+                with patch('ui.filedialog.asksaveasfilename', return_value=str(custom_path)) as dialog:
+                    self.app.export_report()
+                self.assertEqual(Path(dialog.call_args.kwargs['initialdir']), Path(directory) / 'reports' / 'ethernetip')
+                self.assertTrue((Path(directory) / 'reports' / 'ethernetip').is_dir())
+                self.assertTrue(custom_path.is_file())
+            finally:
+                os.chdir(previous)
+
+    def test_export_reports_default_directory_creation_failure(self):
+        self.app.load_sample()
+        with patch('ui.Path.mkdir', side_effect=PermissionError('denied')), \
+             patch('ui.messagebox.showerror') as error, \
+             patch('ui.filedialog.asksaveasfilename') as dialog:
+            self.app.export_report()
+        error.assert_called_once()
+        self.assertIn('denied', error.call_args.args[1])
+        dialog.assert_not_called()
 
     def test_changed_scope_cannot_relabel_evidence(self):
         self.app.load_sample()

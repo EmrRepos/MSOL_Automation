@@ -594,8 +594,8 @@ class SuiteReportTests(unittest.TestCase):
         paths = self.reporter.export_suite(self.result, Mock())
         self.assertEqual(set(paths), {"pdf", "csv"})
         for kind, path in paths.items():
-            self.assertEqual(Path(path).name, f"USB_Suite_Validation_Report.{kind}")
-        self.assertEqual({path.suffix for path in Path("reports").iterdir()}, {".pdf", ".csv"})
+            self.assertEqual(Path(path), Path("reports", "usb", f"USB_Suite_Validation_Report.{kind}").resolve())
+        self.assertEqual({path.suffix for path in Path("reports", "usb").iterdir()}, {".pdf", ".csv"})
         self.assertTrue(Path(paths["pdf"]).read_bytes().startswith(b"%PDF"))
         with Path(paths["csv"]).open(newline="", encoding="utf-8") as source:
             rows = list(csv.DictReader(source))
@@ -616,6 +616,14 @@ class SuiteReportTests(unittest.TestCase):
         self.assertNotIn("serial_access_settings", rows[0])
         self.assertNotIn("serial_exchange", rows[0])
 
+    def test_individual_reports_use_usb_directory(self):
+        result = {"status": "PASS", "passed": 1, "total": 1}
+        csv_path = Path(self.reporter.export_csv(DEVICE, "Validation", result))
+        pdf_path = Path(self.reporter.export_pdf(DEVICE, "Validation", result))
+        for path in (csv_path, pdf_path):
+            self.assertEqual(path.parent, Path("reports", "usb"))
+            self.assertTrue(path.is_file())
+
     def test_pdf_error_is_logged_and_persisted_in_csv(self):
         logger = Mock()
         with patch("core.report_generator.SimpleDocTemplate", side_effect=OSError("disk full")):
@@ -627,7 +635,7 @@ class SuiteReportTests(unittest.TestCase):
         self.assertEqual(self.result["status"], "ERROR")
         self.assertNotIn("pdf", paths)
         self.assertEqual(set(paths), {"csv"})
-        self.assertFalse(list(Path("reports").glob("*.json")))
+        self.assertFalse(list(Path("reports", "usb").glob("*.json")))
         self.assertTrue(logger.called)
 
     def test_pdf_contains_observed_identity_and_driver_evidence(self):
@@ -669,7 +677,7 @@ class SuiteReportTests(unittest.TestCase):
         self.assertEqual(self.result["status"], "ERROR")
         self.assertTrue(any("CSV report failed" in error for error in self.result["report_errors"]))
         self.assertTrue(any("[ERROR]" in call.args[0] for call in logger.call_args_list))
-        self.assertFalse(list(Path("reports").glob("*.json")))
+        self.assertFalse(list(Path("reports", "usb").glob("*.json")))
 
     def test_later_run_replaces_both_reports_using_the_same_simple_names(self):
         from PySide6.QtPdf import QPdfDocument
@@ -678,7 +686,7 @@ class SuiteReportTests(unittest.TestCase):
         self.result["results"][0]["evidence"] = "Latest validation evidence"
         paths = self.reporter.export_suite(self.result, Mock())
         self.assertEqual(paths, first_paths)
-        self.assertEqual(len(list(Path("reports").iterdir())), 2)
+        self.assertEqual(len(list(Path("reports", "usb").iterdir())), 2)
         self.assertEqual(self.result["report_errors"], [])
         with Path(paths["csv"]).open(newline="", encoding="utf-8") as source:
             row = next(csv.DictReader(source))
@@ -701,7 +709,7 @@ class SuiteReportTests(unittest.TestCase):
         self.assertEqual(paths, {})
         self.assertEqual(self.result["status"], "ERROR")
         self.assertEqual(len(self.result["report_errors"]), 2)
-        self.assertFalse(list(Path("reports").iterdir()))
+        self.assertFalse(list(Path("reports", "usb").iterdir()))
 
     def test_reports_use_each_selected_device_identity(self):
         for selected in DEVICES:
@@ -791,7 +799,7 @@ class SuiteRunnerAndUITests(unittest.TestCase):
                         tuple(row["profile"] for row in runner.last_suite["results"]), STANDARD
                     )
                     self.assertTrue(any(row["status"] == "RUNNING" for row in updates))
-                    files = list(Path("reports").iterdir())
+                    files = list(Path("reports", "usb").iterdir())
                     self.assertEqual({path.suffix for path in files}, {".pdf", ".csv"})
                     with next(path for path in files if path.suffix == ".csv").open(
                         newline="", encoding="utf-8"
@@ -944,6 +952,27 @@ class SuiteRunnerAndUITests(unittest.TestCase):
                 panel.table.selectRow(0)
                 panel.open_report()
             self.assertIn(Path(open_file.call_args.args[0]).suffix, (".pdf", ".csv"))
+
+    def test_report_center_uses_only_usb_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            previous = os.getcwd()
+            try:
+                os.chdir(folder)
+                usb = Path("reports", "usb")
+                ethernet = Path("reports", "ethernetip")
+                usb.mkdir(parents=True)
+                ethernet.mkdir(parents=True)
+                (usb / "usb.pdf").write_text("usb", encoding="utf-8")
+                (ethernet / "ethernet.pdf").write_text("ethernet", encoding="utf-8")
+                panel = ReportCenter()
+                try:
+                    self.assertEqual(Path(panel.reports_dir), usb.resolve())
+                    self.assertEqual(panel.table.rowCount(), 1)
+                    self.assertEqual(panel.table.item(0, 0).text(), "usb.pdf")
+                finally:
+                    panel.close()
+            finally:
+                os.chdir(previous)
 
     def test_serial_console_is_the_only_serial_selector_workflow(self):
         with patch("ui.test_panel.TestRunner") as runner_class:

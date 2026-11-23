@@ -1,7 +1,9 @@
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 from main import main
@@ -37,6 +39,17 @@ class CLITests(unittest.TestCase):
         report = json.loads(output.getvalue())
         self.assertEqual(report['scope']['mode'], 'live')
         self.assertEqual(report['identities'][0]['product_name'], 'Lab PLC')
+
+    def test_discovery_output_creates_selected_report_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'reports' / 'ethernetip' / 'discovery.json'
+            with redirect_stdout(io.StringIO()), patch(
+                'main.Discovery.discover', return_value=parse_identity_payload(identity_payload())
+            ):
+                code = main(['discover', '192.0.2.10', '--authorized', '--operator', 'Lab / ticket',
+                             '--output', str(path)])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(path.read_text(encoding='utf-8'))['scope']['mode'], 'live')
 
     def test_network_failure_is_inconclusive(self):
         output = io.StringIO()

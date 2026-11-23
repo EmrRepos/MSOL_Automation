@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 
 from core.packet_analysis import AnalysisCancelled, AnalysisError, AnalysisResult, analyze_capture
 from core.report_generator import ReportGenerator, readable_text
+from core.report_paths import REPORT_DIR
 from dataclasses import asdict
 
 
@@ -121,9 +122,14 @@ class PacketAnalysisDialog(QDialog):
         if not source.is_file():
             self.analysis_error("Choose an existing completed capture file.")
             return
+        try:
+            REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            self.analysis_error(f"Cannot create USB report directory: {error}")
+            return
         output, _ = QFileDialog.getSaveFileName(
             self, "Save packet analysis PDF and CSV",
-            str(Path("reports") / f"USB_Packet_Analysis_Report_{datetime.now():%Y%m%d_%H%M%S}.pdf"),
+            str(REPORT_DIR.resolve() / f"USB_Packet_Analysis_Report_{datetime.now():%Y%m%d_%H%M%S}.pdf"),
             "PDF report (*.pdf)", options=QFileDialog.Option.DontConfirmOverwrite,
         )
         if not output:
