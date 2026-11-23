@@ -1,0 +1,8 @@
+pyusb
+libusb-package; sys_platform == "win32"
+pyserial
+wmi
+pywin32
+PySide6
+PyQt5
+reportlab

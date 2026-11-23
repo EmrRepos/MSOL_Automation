@@ -1,0 +1,24 @@
+{
+  "name": "Micro Motion 5700 (USB Service Port)",
+  "description": "Modbus RTU service-port profile. Address 111 (0x6F) is the reserved Micro Motion service address and always answers on the service port. A valid CRC-checked reply proves two-way communication even when the function code is unsupported.",
+  "match": {
+    "vid": "15A2",
+    "pid": "0400"
+  },
+  "serial": {
+    "baudrate": 115200,
+    "timeout": 2,
+    "read_size": 256,
+    "settle": 0.2
+  },
+  "commands": [
+    {
+      "name": "Service port reachability (Report Slave ID)",
+      "payload": "hex:6f 11",
+      "append_crc": true,
+      "verify_crc": true,
+      "required": true,
+      "notes": "A Modbus exception reply is an acceptable pass: it proves the device received and answered a correctly framed request."
+    }
+  ]
+}
