@@ -78,7 +78,8 @@ class TestPanel(QGroupBox):
         self.suite_description.setStyleSheet("font-size: 10pt;")
         self.suite_description.setToolTip(
             "Live results and combined PDF/CSV reports. Absent interfaces are skipped; "
-            "unavailable evidence is blocked. 30 seconds total, with start/end observations. "
+            "unavailable evidence is blocked. Each check runs once, followed by automatic "
+            "completion after 10 seconds. "
             "Serial, stress and firmware workflows are separate."
         )
         self.profile.currentTextChanged.connect(
@@ -217,7 +218,7 @@ class TestPanel(QGroupBox):
         self.runner.stop()
         if self.runner.running:
             self.log_message(
-                "[INFO] Safe stop requested. Waiting for current suite operation and report save; "
+                "[INFO] Safe stop requested. Waiting for current test operation and report save; "
                 "new tests/capture remain blocked."
             )
         if self.serial_console is not None:

@@ -26,11 +26,11 @@ CDC Validation, HID Validation and Storage Validation. Their individual
 selector entries are removed; the plugin implementations remain reusable.
 The checks run sequentially and
 produces a live results table plus one combined PDF/CSV report set (no JSON).
-The UI requests 30 seconds total revalidation, with fresh seven-check rounds
-at 30-second intervals and an end-of-window observation. Slow native calls
-can extend the window; cancellation or identity loss can end it early.
-Every sample is retained and earlier non-PASS observations cannot be hidden
-by later passes. Longer observation does not establish protocol/device-value
+The checks run once. Automated profiles finish 10 seconds after the checks
+complete, including when outcomes are FAIL, BLOCKED or SKIPPED. Reports are
+saved during that period; slow report saving can extend it. STOP TEST can
+cancel an active run or end the post-check wait early without changing completed
+results. A single observation does not establish protocol/device-value
 correctness or fix descriptor access restrictions. The results window can be
 maximized and reopened using **View Results** during the current session.
 PDF reports use labelled evidence bullets, a result overview and abbreviations;

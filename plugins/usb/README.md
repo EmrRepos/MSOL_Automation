@@ -133,7 +133,7 @@ result. Unavailable evidence is not a hardware pass.
 | Feature | Scope and coverage |
 |---|---|
 | COM discovery | Detects COM ports and displays available device identity and USB metadata. |
-| Standard USB Validation | Runs seven grouped validations with a 30-second observation window and start/end rechecks. |
+| Standard USB Validation | Runs seven grouped validations once and finishes automatically after a 10-second post-check period. |
 | Enumeration Validation | Validates available enumeration and selected-device identity evidence. |
 | Descriptor Validation | Validates available USB descriptor fields and identity evidence. |
 | Descriptor Robustness | Evaluates basic metadata/identifier consistency, not exhaustive fuzzing. |
@@ -167,12 +167,14 @@ available in [TEST_PROFILES.md](TEST_PROFILES.md).
 3. Disconnect the Serial Console and other applications using that port.
 4. Choose **Standard USB Validation** and enable **Hardware mode** for live access.
 5. Click **START TEST** and review the live results and event log.
-6. Wait for revalidation and report saving to finish; use **View Results** to reopen the latest session results.
+6. Wait for automatic completion and report saving; use **View Results** to reopen the latest session results.
 7. Open **Report Center** to view saved PDF/CSV reports.
 
-**STOP TEST** requests cancellation; native driver calls may take time to return.
-The observation window is 30 seconds, but slow hardware calls can extend the run.
-Earlier failures remain visible even if a later sample passes.
+Automated profiles finish automatically 10 seconds after their checks complete,
+whether results pass, fail, are blocked or are skipped. Report saving runs during
+that period and may extend it if slow. **STOP TEST** can still request cancellation;
+native driver calls may take time to return. Stopping during the post-check wait
+preserves completed results. The standard suite does not repeat the checks.
 
 ### Other workflows
 

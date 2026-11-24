@@ -237,8 +237,8 @@ class ReportGenerator:
             ]))
             story.append(overview)
             paragraph(
-                "Repeated observations do not verify device commands, measurements or protocol correctness. "
-                "Unavailable descriptors remain BLOCKED; earlier failures remain visible."
+                "USB/OS observations do not verify device commands, measurements or protocol correctness. "
+                "Unavailable descriptors remain BLOCKED."
             )
             paragraph("Device identity", "Heading2")
             bullets(result["device"])
@@ -262,7 +262,7 @@ class ReportGenerator:
                 "BLOCKED": "Insufficient evidence or access; no pass is claimed.",
                 "SKIPPED": "A verified interface is not applicable.",
                 "ERROR": "An operation or report failed.",
-                "CANCELLED": "The requested observation window was stopped.",
+                "CANCELLED": "The test run was stopped before completion.",
             })
             for row in rows:
                 paragraph(f"{row['profile']} - {row['status']} ({row['duration']}s active checks)", "Heading2")

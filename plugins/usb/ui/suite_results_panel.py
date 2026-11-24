@@ -26,7 +26,8 @@ class SuiteResultsPanel(QDialog):
         layout.addWidget(self.table)
         note = QLabel(
             "Closing only hides results; use View Results to reopen during this session. "
-            "30-second total revalidation checks at the start and end. STOP TEST requests safe cancellation; "
+            "Each check runs once; the run finishes automatically 10 seconds after the checks complete. "
+            "STOP TEST requests safe cancellation; "
             "an in-flight operation must return before stopping. No firmware workflow is included."
         )
         note.setWordWrap(True)
@@ -37,7 +38,7 @@ class SuiteResultsPanel(QDialog):
         self.rows.clear()
         self.table.setRowCount(0)
         self.summary.setText(
-            f"{SUITE_NAME} (7 checks): LIVE HARDWARE + OS METADATA; revalidating for 30 seconds." if hardware
+            f"{SUITE_NAME} (7 checks): LIVE HARDWARE + OS METADATA; each check runs once." if hardware
             else f"{SUITE_NAME} (7 checks): METADATA ONLY - no live serial/USB I/O; hardware-dependent checks blocked."
         )
 
