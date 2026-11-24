@@ -23,6 +23,12 @@ class ReportGenerator:
                                      or live_run.get('operator') != operator.strip()
                                      or live_run.get('authorization_attested') is not True):
             raise ValueError('Live-suite evidence must match the authorized report scope.')
+        mixed = bool(live_run and live_run['suite'] == 'bounded-selected-mixed-v1')
+        fuzz = bool(live_run and live_run['suite'] in ('bounded-cip-fuzz-v1', 'bounded-selected-mixed-v1'))
+        if fuzz and live_run is not None and live_run.get('fuzz_authorization_attested') is not True:
+            raise ValueError('Fuzz-suite evidence requires separate fuzz authorization.')
+        selected_cases = (live_run.get('selected_cases') or
+                          ([live_run['selected_case']] if live_run.get('selected_case') else [])) if live_run else []
         candidates = []
         if live_run:
             for result in live_run['test_results']:
@@ -44,7 +50,9 @@ class ReportGenerator:
                 'target': target, 'operator_and_scope': operator.strip(),
                 'authorization_attested': authorized, 'mode': mode,
                 'transport': 'TCP 44818',
-                'request': 'Bounded Identity/CIP baseline' if live_run else 'ListIdentity (0x0063)',
+                'request': ('Bounded mixed baseline and fuzz selection' if mixed else
+                            'Bounded CIP fuzz suite' if fuzz else
+                            'Bounded Identity/CIP baseline' if live_run else 'ListIdentity (0x0063)'),
                 'observed_at_utc': observed_at, 'outcome': outcome,
             },
             'identities': [asdict(identity) for identity in identities],
@@ -55,8 +63,11 @@ class ReportGenerator:
             'developer_review_candidates': candidates,
             'reproduction': {
                 'prerequisites': 'Same approved target, network vantage point, device build/configuration and maintenance conditions.',
-                'cli_arguments': (['python', 'main.py', 'test', target, '--authorized', '--operator', operator.strip(),
-                                   '--timeout', str(live_run['limits']['request_timeout_seconds'])]
+                'cli_arguments': (['python', 'main.py', 'selected' if mixed else 'fuzz' if fuzz else 'test', target, '--authorized',
+                                   '--operator', operator.strip(), '--timeout',
+                                   str(live_run['limits']['request_timeout_seconds'])] +
+                                  (['--fuzz-authorized'] if fuzz else []) +
+                                  [value for identifier in selected_cases for value in ('--case', identifier)]
                                   if live_run else None),
                 'evidence': 'Live-suite exchanges contain exact bounded wire bytes, timestamps and timings. '
                             'Session handles and sender contexts will differ on subsequent runs.',
@@ -66,9 +77,9 @@ class ReportGenerator:
             'limitations': [
                 'Sample mode contains synthetic data, not device evidence.',
                 'Authorization is an operator attestation, not independently verified.',
-                'Read-only traffic can still affect fragile ICS devices; use an approved window.',
-                'Live suites create at most one session and read Identity attributes 1-7; no writes, resets, '
-                'I/O traffic, flooding or fuzzing are performed.',
+                'Read-only and malformed traffic can affect fragile ICS devices; use an approved window.',
+                'The baseline suite reads Identity attributes 1-7. The separately enabled fuzz suite sends '
+                'four boundary or malformed CIP requests. Neither sends write services, resets, I/O traffic or flooding.',
                 'A sent UnregisterSession and local socket closure do not prove remote session deletion.',
                 'Packet evidence hashes detect changes only against a separately trusted hash; they are not signatures.',
                 'No vulnerability, CVE applicability or compliance verdict is inferred from identity.',

@@ -73,6 +73,79 @@ class CLITests(unittest.TestCase):
             connect.assert_not_called()
         self.assertTrue(any(item['coverage'] == 'not_implemented' for item in json.loads(output.getvalue())))
 
+    def test_single_case_cli_and_report_reproduction(self):
+        from test_live_tests import DeviceSocket
+        device = DeviceSocket()
+        output = io.StringIO()
+        with redirect_stdout(output), patch('core.connection.socket.create_connection', return_value=device), patch(
+            'threading.Event.wait', return_value=False
+        ):
+            code = main(['test', '192.0.2.10', '--authorized', '--operator', 'Lab / ticket', '--case', 'CIP-03'])
+        self.assertEqual(code, 0)
+        self.assertEqual(device.commands, [0x65, 0x6F, 0x66])
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['live_test_run']['selected_case'], 'CIP-03')
+        self.assertEqual(report['reproduction']['cli_arguments'][-2:], ['--case', 'CIP-03'])
+
+    def test_multiple_mixed_cases_report_reproduction(self):
+        from test_live_tests import DeviceSocket
+        from test_protocol import SimulatedSocket
+        baseline, fuzz = DeviceSocket(), SimulatedSocket()
+        output = io.StringIO()
+        with redirect_stdout(output), patch('core.connection.socket.create_connection', side_effect=[baseline, fuzz]), patch(
+            'threading.Event.wait', return_value=False
+        ):
+            code = main(['selected', '192.0.2.10', '--authorized', '--fuzz-authorized',
+                         '--operator', 'Lab', '--case', 'CIP-01', '--case', 'FUZ-02'])
+        self.assertEqual(code, 0)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['live_test_run']['selected_cases'], ['CIP-01', 'FUZ-02'])
+        self.assertEqual(report['reproduction']['cli_arguments'][2], 'selected')
+        self.assertIn('--fuzz-authorized', report['reproduction']['cli_arguments'])
+        self.assertEqual(report['reproduction']['cli_arguments'][-4:], ['--case', 'CIP-01', '--case', 'FUZ-02'])
+
+    def test_single_case_rejected_for_other_commands_and_invalid_ids(self):
+        with redirect_stderr(io.StringIO()), patch('core.connection.socket.create_connection') as connect:
+            with self.assertRaises(SystemExit):
+                main(['coverage', '--case', 'CIP-01'])
+            self.assertEqual(main(['test', '192.0.2.10', '--authorized', '--operator', 'Lab', '--case', 'FUZ-01']), 1)
+        connect.assert_not_called()
+
+    def test_single_fuzz_case_report_preserves_authorization_and_reproduction(self):
+        from test_protocol import SimulatedSocket
+        device = SimulatedSocket()
+        output = io.StringIO()
+        with redirect_stdout(output), patch('core.connection.socket.create_connection', return_value=device), patch(
+            'threading.Event.wait', return_value=False
+        ):
+            code = main(['fuzz', '192.0.2.10', '--authorized', '--fuzz-authorized', '--operator', 'Lab',
+                         '--case', 'FUZ-02'])
+        self.assertEqual(code, 0)
+        self.assertEqual(device.commands, [0x65, 0x6F, 0x66])
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['live_test_run']['selected_case'], 'FUZ-02')
+        self.assertIn('--fuzz-authorized', report['reproduction']['cli_arguments'])
+        self.assertEqual(report['reproduction']['cli_arguments'][-2:], ['--case', 'FUZ-02'])
+
+    def test_fuzz_requires_separate_authorization_and_reports_its_mode(self):
+        import threading
+        from modules.fuzz_tests import FuzzTestRunner
+        cancel = threading.Event()
+        cancel.set()
+        run = FuzzTestRunner().run('192.0.2.10', 'Lab / ticket', True, cancel, fuzz_authorized=True)
+        with redirect_stderr(io.StringIO()), patch('main.FuzzTestRunner.run') as execute:
+            with self.assertRaises(SystemExit):
+                main(['fuzz', '192.0.2.10', '--authorized', '--operator', 'Lab / ticket'])
+            execute.assert_not_called()
+        output = io.StringIO()
+        with redirect_stdout(output), patch('main.FuzzTestRunner.run', return_value=run):
+            self.assertEqual(main(['fuzz', '192.0.2.10', '--authorized', '--fuzz-authorized',
+                                   '--operator', 'Lab / ticket']), 1)
+        report = json.loads(output.getvalue())
+        self.assertEqual(report['scope']['request'], 'Bounded CIP fuzz suite')
+        self.assertEqual(report['reproduction']['cli_arguments'][2], 'fuzz')
+        self.assertIn('--fuzz-authorized', report['reproduction']['cli_arguments'])
+
 
 if __name__ == '__main__':
     unittest.main()
