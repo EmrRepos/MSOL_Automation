@@ -1,3 +1,0 @@
-pycomm3
-scapy
-rich

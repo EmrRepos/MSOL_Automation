@@ -1,0 +1,14 @@
+# USB framework
+pyusb
+libusb-package; sys_platform == "win32"
+pyserial
+wmi
+pywin32
+PySide6
+PyQt5
+reportlab
+
+# EtherNet/IP optional libraries retained from its existing requirements
+pycomm3
+scapy
+rich

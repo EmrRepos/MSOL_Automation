@@ -1,5 +1,23 @@
 # MSOL Automation
 
+## Setup
+
+Install Python 3.14 x64 for the combined Windows USB and EtherNet/IP
+environment. From the repository root, run:
+
+```powershell
+py -3.14 setup_environment.py
+```
+
+This creates `.venv` if needed, installs both frameworks' dependencies from
+the root [requirements.txt](requirements.txt), and runs `pip check`. An existing
+valid `.venv` with the same Python major/minor version is reused, not replaced.
+Rerun the command after dependency changes. Python and internet access are
+required; the script does not install Python itself. A requirements file is a
+pip dependency list and cannot create an environment by itself.
+
+## Run
+
 Select one USB or EtherNet/IP framework from the repository root:
 
 ```powershell
@@ -18,7 +36,7 @@ remaining command-line arguments. Tests are started by the operator in the UI;
 USB automatically scans for COM ports, but opening a UI does not start tests or
 send EtherNet/IP traffic.
 
-Install the selected application's dependencies in the environment first; see
+After setup, see
 the [USB](plugins/usb/README.md) and [EtherNet/IP](plugins/ethernetip/README.md)
 documentation for prerequisites, test workflows, and authorization and safety
 requirements. EtherNet/IP CLI authorization checks remain in effect. USB
@@ -35,6 +53,8 @@ not moved. USB device profiles remain under `plugins/usb/device_profiles`.
 ```text
 MSOL_Automation/
 |-- launcher.py
+|-- setup_environment.py
+|-- requirements.txt         # Dependencies for both frameworks
 |-- framework/
 |   |-- plugin_loader/       # Contract, discovery and process isolation
 |   |-- logging/             # Reserved for verified shared implementations
@@ -44,12 +64,10 @@ MSOL_Automation/
 |-- plugins/
 |   |-- usb/
 |   |   |-- plugin.py        # Top-level adapter
-|   |   |-- main.py, core/, ui/, plugins/, device_profiles/, tests/
-|   |   `-- requirements.txt
+|   |   `-- main.py, core/, ui/, plugins/, device_profiles/, tests/
 |   `-- ethernetip/
 |       |-- plugin.py        # Top-level adapter
-|       |-- main.py, core/, modules/, reports/, ui.py, tests/
-|       `-- requirements.txt
+|       `-- main.py, core/, modules/, reports/, ui.py, tests/
 `-- tests/                   # Launcher and lifecycle tests
 ```
 

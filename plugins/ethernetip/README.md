@@ -9,11 +9,12 @@ a complete implementation of the CIP specifications.
 
 ## Run
 
-Use Python 3.10+ with Tkinter available. The implemented functionality uses only the
-Python standard library; no pip installation is required. The existing
-`requirements.txt` lists optional libraries reserved for future work, not runtime
-requirements for this increment. Windows python.org installations normally include Tk.
-On Linux, install your distribution's Tkinter package if needed.
+The standalone EtherNet/IP implementation uses Python 3.10+ and the standard
+library with Tkinter. For the shared Windows environment used by both plugins,
+follow the [repository setup](../../README.md#setup) using Python 3.14 x64.
+The shared requirements also include optional EtherNet/IP libraries reserved
+for future work. Windows python.org installations normally include Tk; on
+Linux, install your distribution's Tkinter package if needed.
 
 ```powershell
 .\.venv\Scripts\python.exe launcher.py ethernetip

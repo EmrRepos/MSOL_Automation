@@ -25,17 +25,10 @@ Offline capture analysis does not require connected hardware or USBPcap to be ru
 
 Download or clone this repository, then open PowerShell in the repository root.
 
-### Create the Python environment
+### Create the shared environment and install dependencies
 
 ```powershell
-py -3.14 -m venv .venv
-```
-
-### Install dependencies
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r plugins\usb\requirements.txt
-.\.venv\Scripts\python.exe -m pip check
+py -3.14 setup_environment.py
 ```
 
 ### Start the application
@@ -61,7 +54,6 @@ modules live in the `core` package. The standalone entry point remains
 ```text
 USB_Pentest_Framework/
 |-- main.py                         # Application entry point
-|-- requirements.txt                # Python dependencies
 |-- TEST_PROFILES.md                # Detailed profile reference
 |-- core/
 |   |-- __init__.py
