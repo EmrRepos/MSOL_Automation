@@ -752,10 +752,10 @@ class SuiteRunnerAndUITests(unittest.TestCase):
                 self.assertTrue(entered.wait(2))
                 runner.stop()
                 self.assertTrue(runner.running)
-                self.assertTrue(runner._suite_cancel.is_set())
+                self.assertTrue(runner._stop_requested.is_set())
                 runner.start("Descriptor Validation", DEVICE, Mock(), Mock())
                 self.assertEqual(suite.return_value.run.call_count, 1)
-                self.assertEqual(suite.return_value.run.call_args.kwargs["duration_seconds"], 30)
+                self.assertNotIn("duration_seconds", suite.return_value.run.call_args.kwargs)
             finally:
                 release.set()
                 runner.worker_thread.join(3)
@@ -781,14 +781,13 @@ class SuiteRunnerAndUITests(unittest.TestCase):
                         side_effect=lambda plugins: original(
                             plugins, refresh=lambda device: dict(device)
                         ),
-                    ):
+                    ), patch("core.test_runner.AUTO_FINISH_DELAY_SECONDS", 0):
                         runner = TestRunner()
                         done = Mock()
                         updates = []
                         runner.start(
                             SUITE_NAME, DEVICE, Mock(), Mock(), use_hardware=True,
                             suite_update=updates.append, suite_finished=done,
-                            suite_duration_seconds=0,
                         )
                         runner.worker_thread.join(5)
                     self.assertFalse(runner.running)

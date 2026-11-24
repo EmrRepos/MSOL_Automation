@@ -23,15 +23,18 @@ from plugins.hid_attack_surface_review import HIDAttackSurfaceReview
 from plugins.storage_exposure_review import StorageExposureReview
 from plugins.serial_comm_test import SerialCommunicationTest
 from core.test_suite import ApplicableSuite, SUITE_NAME
+
+AUTO_FINISH_DELAY_SECONDS = 10
+
+
 class TestRunner:
 
     def __init__(self):
 
         self.running = False
-        self._suite_cancel = threading.Event()
-        self._suite_active = False
+        self._stop_requested = threading.Event()
         self.last_suite = None
-        self.worker_thread = None
+        self.worker_thread: threading.Thread | None = None
 
         self.dashboard = None
 
@@ -81,7 +84,6 @@ class TestRunner:
         pass_callback=None,
         suite_update=None,
         suite_finished=None,
-        suite_duration_seconds=30,
     ):
 
         if self.running:
@@ -93,9 +95,8 @@ class TestRunner:
             return
 
         self.running = True
+        self._stop_requested.clear()
         if profile == SUITE_NAME:
-            self._suite_active = True
-            self._suite_cancel.clear()
             self.last_suite = None
             selected = dict(device)
 
@@ -104,10 +105,10 @@ class TestRunner:
                 logger(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] START RUN: {profile}")
                 try:
                     result = ApplicableSuite(self.plugins).run(
-                        selected, use_hardware, self._suite_cancel,
+                        selected, use_hardware, self._stop_requested,
                         logger, progress_callback, suite_update or (lambda row: None),
-                        duration_seconds=suite_duration_seconds,
                     )
+                    completed_at = time.monotonic()
                     try:
                         self.db.save_result(
                             result["started"], selected.get("name", "Unknown Device"),
@@ -122,6 +123,7 @@ class TestRunner:
                     if result["status"] == "PASS" and pass_callback:
                         pass_callback()
                     logger(f"[{result['status']}] Suite {result['run_id']} completed.")
+                    self._wait_after_completion(completed_at, logger)
                 except Exception as error:
                     logger(f"[ERROR] Suite execution failed: {error}")
                     result = result or {
@@ -132,7 +134,6 @@ class TestRunner:
                 finally:
                     logger(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] STOP RUN: {profile}")
                     logger("--------------------")
-                    self._suite_active = False
                     self.running = False
                     if suite_finished:
                         suite_finished(result)
@@ -158,7 +159,7 @@ class TestRunner:
 
                 for i in range(1, 31):
 
-                    if not self.running:
+                    if self._stop_requested.is_set():
 
                         logger(
                             "[WARN] Test Stopped By User"
@@ -170,7 +171,10 @@ class TestRunner:
 
                     progress_callback(i)
 
-                    time.sleep(0.03)
+                    if self._stop_requested.wait(0.03):
+                        logger("[WARN] Test Stopped By User")
+                        progress_callback(0)
+                        return
 
                 #
                 # Device Validation
@@ -219,6 +223,11 @@ class TestRunner:
                     logger,
                     use_hardware
                 )
+                completed_at = time.monotonic()
+                if self._stop_requested.is_set():
+                    logger("[WARN] Test stopped while the plugin was executing.")
+                    progress_callback(0)
+                    return
 
                 #
                 # Final Progress
@@ -226,19 +235,16 @@ class TestRunner:
 
                 for i in range(31, 101):
 
-                    if not self.running:
+                    if self._stop_requested.is_set():
 
                         logger(
-                            "[WARN] Test Stopped By User"
+                            "[INFO] Stop requested after checks completed; saving the result."
                         )
-
-                        progress_callback(0)
-
-                        return
+                        break
 
                     progress_callback(i)
 
-                    time.sleep(0.02)
+                    self._stop_requested.wait(0.02)
 
                 progress_callback(100)
 
@@ -327,6 +333,8 @@ class TestRunner:
                         "[FAIL] Test Completed With Errors"
                     )
 
+                self._wait_after_completion(completed_at, logger)
+
             except Exception as ex:
 
                 logger(
@@ -339,17 +347,21 @@ class TestRunner:
                 logger("--------------------")
                 self.running = False
 
-        threading.Thread(
+        self.worker_thread = threading.Thread(
             target=worker,
             daemon=True
-        ).start()
+        )
+        self.worker_thread.start()
+
+    def _wait_after_completion(self, completed_at, logger):
+        remaining = max(0, AUTO_FINISH_DELAY_SECONDS - (time.monotonic() - completed_at))
+        if remaining and not self._stop_requested.is_set():
+            logger("[INFO] Checks complete; finishing automatically after 10 seconds.")
+            self._stop_requested.wait(remaining)
 
     def stop(self):
 
-        if self._suite_active:
-            self._suite_cancel.set()
-            return
-        self.running = False
+        self._stop_requested.set()
 
         print(
             "[INFO] Stop Requested"
