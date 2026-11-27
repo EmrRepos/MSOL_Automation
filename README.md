@@ -122,13 +122,51 @@ CLI output is JSON on the console. To save a report, provide `--output` with a
 [EtherNet/IP CLI guide](plugins/ethernetip/README.md#cli) for examples and
 the meaning of exit codes.
 
+## Build Windows executables
+
+On Windows x64, set up the shared Python 3.14 environment first, then run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_release.ps1
+```
+
+The script creates `release\USB.exe` and `release\Ethernetip.exe` and checks
+that essential modules and resources are present. It refuses to overwrite an
+existing output directory. For another build, choose a new directory:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_release.ps1 -OutputDirectory release-1.0.0
+```
+
+Share only the two `.exe` files, not the `_build` and `_spec` folders. Before
+publishing, test each executable on a clean Windows machine without Python,
+including report export and the approved target-device workflows. The tester
+still needs the device driver; USB capture separately requires USBPcap and
+appropriate permissions. These builds open the GUI; the EtherNet/IP CLI is not
+intended for use through the windowed executable.
+
+After verification, upload the executables to a versioned release. Generate
+SHA-256 checksums for recipients with:
+
+```powershell
+Get-FileHash .\release\USB.exe, .\release\Ethernetip.exe -Algorithm SHA256
+```
+
+The USB executable writes reports and history under
+`%LOCALAPPDATA%\USB_Pentest_Framework`. Its bundled device profiles are
+read-only resources, not persistent user-editable files. EtherNet/IP exports
+are saved manually to the destination selected in the UI.
+
 ## Repository layout
 
 ```text
 MSOL_Automation/
 |-- launcher.py              # Lists and launches a framework
 |-- setup_environment.py     # Creates or updates the shared environment
+|-- build_release.ps1        # Builds and checks both Windows executables
 |-- requirements.txt         # Dependencies for both frameworks
+|-- requirements-build.txt   # Additional executable build dependency
 |-- framework/
 |   `-- plugin_loader/       # Discovery, lifecycle and process isolation
 |-- plugins/

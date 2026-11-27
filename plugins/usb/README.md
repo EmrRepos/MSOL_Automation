@@ -41,8 +41,8 @@ These commands use the virtual environment directly; activation and PowerShell
 execution-policy changes are not required. Automated reports are saved in
 `reports/usb` under the current working directory, and history uses that
 working directory; device profiles are loaded from this plugin's directory.
-Source execution is the maintained workflow; executable build configuration is
-not maintained.
+For Windows executable builds and their different data location, see the
+[repository release instructions](../../README.md#build-windows-executables).
 
 ## 4. Project Architecture and Hardware Mode
 
