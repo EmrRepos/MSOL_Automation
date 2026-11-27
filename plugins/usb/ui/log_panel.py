@@ -18,11 +18,9 @@ class LogPanel(QGroupBox):
         self.logs.setMinimumHeight(150)
         self.logs.setReadOnly(True)
         self.logs.setStyleSheet("""
-            background-color: black;
-            color: white;
-            border: none;
-            font-family: Consolas;
-            font-size: 11pt;
+            background-color: #000000;
+            color: #FFFFFF;
+            border: 1px solid #D7E0E9;
         """)
 
         layout.addWidget(self.logs)

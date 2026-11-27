@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget,
-    QVBoxLayout,
+    QHBoxLayout,
     QPushButton,
     QSizePolicy,
 )
@@ -12,15 +12,18 @@ class TopToolbar(QWidget):
 
         super().__init__()
 
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
         self.start_btn = QPushButton("START TEST")
         self.stop_btn = QPushButton("STOP TEST")
-        self.report_btn = QPushButton("EXPORT REPORT")
+        self.report_btn = QPushButton("VIEW REPORTS")
         self.firmware_btn = QPushButton("FIRMWARE USB CAPTURE")
         self.settings_btn = QPushButton("SETTINGS")
+        self.start_btn.setObjectName("StartButton")
+        self.stop_btn.setObjectName("StopButton")
+        self.stop_btn.setToolTip("Request safe test cancellation or disconnect the serial console")
 
         for button in (
             self.start_btn,

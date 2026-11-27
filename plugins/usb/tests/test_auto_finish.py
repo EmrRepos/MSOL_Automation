@@ -42,11 +42,19 @@ class AutoFinishTests(unittest.TestCase):
             for status in ("PASS", "FAIL", "BLOCKED", "SKIPPED", "ERROR"):
                 with self.subTest(profile=profile, status=status):
                     execute = self.start_profile(profile, status)
+                    finished = Mock()
+                    phases = []
                     with patch("core.test_runner.time.monotonic", return_value=100), \
                          patch.object(self.runner._stop_requested, "wait", return_value=False) as wait:
-                        self.runner.start(profile, DEVICE, Mock(), Mock())
+                        self.runner.start(
+                            profile, DEVICE, Mock(), Mock(),
+                            finished_callback=finished, phase_callback=phases.append,
+                        )
                         self.join_worker()
                     self.assertFalse(self.runner.running)
+                    finished.assert_called_once_with(status)
+                    self.assertTrue(any("saving" in phase for phase in phases))
+                    self.assertTrue(any("10 seconds" in phase for phase in phases))
                     execute.assert_called_once()
                     self.assertIn(call(10), wait.call_args_list)
                     if profile == SUITE_NAME:
@@ -139,10 +147,27 @@ class AutoFinishTests(unittest.TestCase):
             if value == 30:
                 self.runner.stop()
 
-        self.runner.start("Descriptor Validation", DEVICE, Mock(), progress)
+        finished = Mock()
+        self.runner.start(
+            "Descriptor Validation", DEVICE, Mock(), progress, finished_callback=finished
+        )
         self.join_worker()
         plugin.assert_not_called()
         self.assertFalse(self.runner.running)
+        finished.assert_called_once_with("CANCELLED")
+
+    def test_execution_exception_is_reported_as_error(self):
+        plugin = Mock()
+        plugin.return_value.execute.side_effect = RuntimeError("device error")
+        self.runner.plugins["Descriptor Validation"] = plugin
+        finished, logger = Mock(), Mock()
+        with patch.object(self.runner._stop_requested, "wait", return_value=False):
+            self.runner.start(
+                "Descriptor Validation", DEVICE, logger, Mock(), finished_callback=finished
+            )
+            self.join_worker()
+        finished.assert_called_once_with("ERROR")
+        self.assertTrue(any("device error" in args.args[0] for args in logger.call_args_list))
 
 
 if __name__ == "__main__":

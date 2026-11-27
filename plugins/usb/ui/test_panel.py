@@ -20,9 +20,13 @@ class TestPanel(QGroupBox):
 
     log_requested = Signal(str)
     progress_requested = Signal(int)
-    test_passed = Signal()
     suite_row_changed = Signal(dict)
     suite_completed = Signal(dict)
+    run_completed = Signal(str)
+    phase_changed = Signal(str)
+    phase_updated = Signal(str)
+    activity_changed = Signal()
+    suite_results_requested = Signal()
 
     def __init__(self):
         
@@ -38,17 +42,19 @@ class TestPanel(QGroupBox):
         self.dashboard: DashboardPanel | None = None
         self.suite_row_changed.connect(self.update_suite_row)
         self.suite_completed.connect(self.finish_suite)
+        self.run_completed.connect(self.finish_run)
+        self.phase_changed.connect(self.set_phase)
 
 
         layout = QVBoxLayout()
         layout.setSpacing(6)
 
         title = QLabel("Test Profile")
-        title.setStyleSheet(
-            "font-weight:bold;font-size:12pt;"
-        )
+        title.setStyleSheet("font-weight: bold;")
 
         self.profile = QComboBox()
+        self.profile.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.profile.setMinimumContentsLength(12)
 
         self.profile.addItems([
             SUITE_NAME,
@@ -69,13 +75,16 @@ class TestPanel(QGroupBox):
 
         self.hardware_checkbox = QCheckBox("Hardware mode")
         self.hardware_checkbox.setToolTip("Enable real device interactions (pyusb/pyserial required)")
+        self.mode_description = QLabel()
+        self.mode_description.setWordWrap(True)
+        self.hardware_checkbox.toggled.connect(self.update_mode_description)
+        self.update_mode_description(False)
         self.suite_description = QLabel(
             "<ul style='margin: 0px; padding-left: 18px;'>" +
             "".join(f"<li>{name}</li>" for name in STANDARD) + "</ul>"
         )
         self.suite_description.setTextFormat(Qt.TextFormat.RichText)
         self.suite_description.setWordWrap(True)
-        self.suite_description.setStyleSheet("font-size: 10pt;")
         self.suite_description.setToolTip(
             "Live results and combined PDF/CSV reports. Absent interfaces are skipped; "
             "unavailable evidence is blocked. Each check runs once, followed by automatic "
@@ -89,6 +98,7 @@ class TestPanel(QGroupBox):
         layout.addWidget(title)
         layout.addWidget(self.profile)
         layout.addWidget(self.hardware_checkbox)
+        layout.addWidget(self.mode_description)
         layout.addWidget(self.suite_description)
         self.view_results_btn = QPushButton("View Results")
         self.view_results_btn.setEnabled(False)
@@ -96,6 +106,9 @@ class TestPanel(QGroupBox):
         layout.addWidget(self.view_results_btn)
         layout.addWidget(QLabel("Progress"))
         layout.addWidget(self.progress)
+        self.phase_label = QLabel("Ready")
+        self.phase_label.setWordWrap(True)
+        layout.addWidget(self.phase_label)
         layout.addStretch()
 
         self.setLayout(layout)
@@ -169,6 +182,11 @@ class TestPanel(QGroupBox):
         if self.dashboard is not None:
              self.dashboard.increment_test_runs()
 
+        self.progress.setValue(0)
+        self.set_phase(
+            f"Running {profile} on {self.selected_device.get('port', 'N/A')} "
+            f"({'hardware' if self.hardware_checkbox.isChecked() else 'metadata only'})."
+        )
         suite_options = {}
         if suite:
             suite_options = {
@@ -181,9 +199,11 @@ class TestPanel(QGroupBox):
             self.log_message,
             self.update_progress,
             use_hardware=self.hardware_checkbox.isChecked(),
-            pass_callback=self.test_passed.emit,
+            finished_callback=self.run_completed.emit,
+            phase_callback=self.phase_changed.emit,
             **suite_options,
         )
+        self.activity_changed.emit()
 
     def update_suite_row(self, row):
         if self.suite_panel is not None:
@@ -191,6 +211,10 @@ class TestPanel(QGroupBox):
 
     def show_suite_results(self):
         if self.suite_panel is not None:
+            if self.suite_panel.embedded:
+                self.suite_results_requested.emit()
+                self.suite_panel.table.setFocus()
+                return
             if self.suite_panel.isMinimized():
                 self.suite_panel.showNormal()
             else:
@@ -206,6 +230,23 @@ class TestPanel(QGroupBox):
         self.suite_active = False
         self.update_serial_lock()
 
+    def finish_run(self, status):
+        self.set_phase(f"Finished: {status}")
+        if self.dashboard is not None:
+            self.dashboard.record_run(status)
+        self.activity_changed.emit()
+
+    def set_phase(self, text):
+        self.phase_label.setText(text)
+        self.phase_updated.emit(text)
+
+    def update_mode_description(self, hardware):
+        self.mode_description.setText(
+            "Live USB/serial access is enabled for supported checks."
+            if hardware else
+            "Metadata only: no live USB/serial I/O; hardware-dependent checks may be blocked."
+        )
+
     def stop_test(self):
 
         self.log_message("[INFO] STOP BUTTON PRESSED")
@@ -217,6 +258,7 @@ class TestPanel(QGroupBox):
 
         self.runner.stop()
         if self.runner.running:
+            self.set_phase("Stop requested; waiting for the current operation and reports.")
             self.log_message(
                 "[INFO] Safe stop requested. Waiting for current test operation and report save; "
                 "new tests/capture remain blocked."
@@ -227,6 +269,7 @@ class TestPanel(QGroupBox):
     def set_firmware_capture_active(self, active):
         self.firmware_capture_active = active
         self.update_serial_lock()
+        self.activity_changed.emit()
 
     def update_serial_lock(self):
         if self.serial_console is not None:

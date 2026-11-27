@@ -145,7 +145,7 @@ result. Unavailable evidence is not a hardware pass.
 | Firmware USB Capture | Passively records whole-hub USB traffic while the user runs the vendor updater. |
 | Packet Security Analysis | Reviews supported USB captures for credential-like text, readable data, transfer issues and repeated payloads. |
 | Live Results and Event Log | Displays evidence, outcomes, durations, timestamped boundaries and check separators. |
-| Dashboard | Summarizes detected/authorized devices, test runs and passed results. |
+| Dashboard | Summarizes detected COM ports and session run counts: started, passed, failed and other outcomes. |
 | Reporting and History | Saves PDF/CSV evidence reports and automated test summaries in SQLite. |
 
 The seven standard validations are grouped under **Standard USB Validation**,
@@ -160,9 +160,19 @@ available in [TEST_PROFILES.md](TEST_PROFILES.md).
 2. Select its COM port and confirm the displayed identity.
 3. Disconnect the Serial Console and other applications using that port.
 4. Choose **Standard USB Validation** and enable **Hardware mode** for live access.
-5. Click **START TEST** and review the live results and event log.
-6. Wait for automatic completion and report saving; use **View Results** to reopen the latest session results.
-7. Open **Report Center** to view saved PDF/CSV reports.
+5. Click **START TEST** and review the live results in the **Standard USB Validation** tab.
+6. Switch to **Live Event Log** for the log, and wait for automatic completion and report saving.
+7. Click **VIEW REPORTS** to open Report Center and view saved PDF/CSV reports.
+
+On smaller windows, scroll the left sidebar to reach all test controls.
+The selected port remains selected when another port is detected; if it is
+disconnected, check the newly displayed selection before starting another run.
+The results tab opens automatically when the standard suite starts. **View Results**
+returns to the current or most recent suite results; other profiles show their
+detailed output in the event log.
+The dashboard counts overall runs in the current session, not individual checks.
+Blocked, skipped, cancelled, error and unknown outcomes appear under **Other outcomes**,
+not as passed or failed runs.
 
 Automated profiles finish automatically 10 seconds after their checks complete,
 whether results pass, fail, are blocked or are skipped. Report saving runs during

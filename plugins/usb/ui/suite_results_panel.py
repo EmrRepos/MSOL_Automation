@@ -7,25 +7,38 @@ from PySide6.QtCore import Qt
 
 
 class SuiteResultsPanel(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, embedded=False):
         super().__init__(parent)
-        self.setWindowFlags(
-            self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
-        )
+        self.embedded = embedded
+        if embedded:
+            self.setWindowFlags(Qt.WindowType.Widget)
+        else:
+            self.setWindowFlags(
+                self.windowFlags() | Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
+            )
         self.setWindowTitle(f"{SUITE_NAME} - Live Results")
         self.resize(1050, 600)
         layout = QVBoxLayout(self)
+        if embedded:
+            heading = QLabel(f"{SUITE_NAME} - live / latest results")
+            heading.setStyleSheet("font-weight: bold;")
+            layout.addWidget(heading)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
+        self.summary.setText("Live results for Standard USB Validation will appear here.")
         layout.addWidget(self.summary)
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Profile", "Status", "Seconds", "Evidence", "Details"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        header = self.table.horizontalHeader()
+        for column in (0, 1, 2):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+        for column in (3, 4):
+            header.setSectionResizeMode(column, QHeaderView.ResizeMode.Stretch)
         self.table.setWordWrap(True)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         layout.addWidget(self.table)
         note = QLabel(
-            "Closing only hides results; use View Results to reopen during this session. "
+            ("" if embedded else "Closing only hides results; use View Results to reopen during this session. ") +
             "Each check runs once; the run finishes automatically 10 seconds after the checks complete. "
             "STOP TEST requests safe cancellation; "
             "an in-flight operation must return before stopping. No firmware workflow is included."

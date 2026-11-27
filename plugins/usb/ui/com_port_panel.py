@@ -81,11 +81,14 @@ class COMPortPanel(QGroupBox):
         self.status_lbl = QLabel("No COM ports detected")
         self.status_lbl.setWordWrap(True)
         self.status_lbl.setStyleSheet("color:#555;")
+        self.selected_lbl = QLabel("Selected device: none")
+        self.selected_lbl.setWordWrap(True)
 
         layout.addWidget(label)
         layout.addWidget(self.port_combo)
         layout.addWidget(self.refresh_btn)
         layout.addWidget(self.status_lbl)
+        layout.addWidget(self.selected_lbl)
 
         self.setLayout(layout)
 
@@ -148,6 +151,7 @@ class COMPortPanel(QGroupBox):
         try:
             previous = {d.get("port") for d in self.devices}
             selected = self.port_combo.currentText()
+            previous_device = self.current_device()
 
             ports, new_ports = result
 
@@ -182,6 +186,7 @@ class COMPortPanel(QGroupBox):
                 )
             else:
                 self.status_lbl.setText("No COM ports detected")
+                self.selected_lbl.setText("Selected device: none")
                 self.device_selected.emit({})
 
             for dev in new_ports:
@@ -193,21 +198,14 @@ class COMPortPanel(QGroupBox):
             if not ports:
                 return
 
-            # Prefer a newly arrived port, otherwise keep the user's choice.
-            target = (
-                new_ports[0]["port"] if new_ports
-                else (
-                    selected
-                    if selected in [d["port"] for d in ports]
-                    else ports[0]["port"]
-                )
-            )
+            # Keep the user's choice while it remains connected.
+            target = selected if selected in [d["port"] for d in ports] else ports[0]["port"]
 
             index = self.port_combo.findText(target)
 
             if index >= 0 and index != self.port_combo.currentIndex():
                 self.port_combo.setCurrentIndex(index)
-            elif changed or announce_all:
+            elif changed or announce_all or self.current_device() != previous_device:
                 self.on_port_selected()
 
         except Exception as ex:
@@ -231,7 +229,13 @@ class COMPortPanel(QGroupBox):
         if not device:
             return
 
+        self.selected_lbl.setText(
+            f"Selected: {device.get('port', 'N/A')} - {device.get('name', 'Unknown')}\n"
+            f"VID: {device.get('vid', 'N/A')}  PID: {device.get('pid', 'N/A')}  "
+            f"Serial: {device.get('serial', 'N/A')}"
+        )
         self.device_selected.emit(device)
+        self.log_requested.emit(f"[INFO] Selected COM port: {device.get('port', 'N/A')}")
         self.describe_device(device)
 
     def describe_device(self, device):
