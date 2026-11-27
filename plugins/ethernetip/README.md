@@ -9,11 +9,11 @@ a complete implementation of the CIP specifications.
 
 ## Run
 
-Use Python 3.10+ with Tkinter available. The implemented functionality uses only the
-Python standard library; no pip installation is required. The existing
-`requirements.txt` lists optional libraries reserved for future work, not runtime
-requirements for this increment. Windows python.org installations normally include Tk.
-On Linux, install your distribution's Tkinter package if needed.
+Use Python 3.10+ with Tkinter available. PDF export requires ReportLab; install the
+plugin requirements once with `python -m pip install -r requirements.txt` from this
+directory. The other listed libraries are reserved for future work. Windows python.org
+installations normally include Tk. On Linux, install your distribution's Tkinter
+package if needed.
 
 ```powershell
 python main.py
@@ -25,19 +25,31 @@ and sends no traffic. Sample evidence remains explicitly labeled in exported rep
 
 For a real assessment, enter one literal unicast IPv4 address and an operator/scope
 reference. Start a manual assessment, confirm a single identity probe, or select
-**Run live suite** after attesting authorization. The main screen shows **Live tests & coverage**
-on the left and **Live Logs** on the right, with progress and identity observations. Selecting
-a test displays its details. To run one or more executable tests, use **Ctrl+click** to
-select separate rows or **Shift+click** to select a range, then click **Run selected** and
-confirm the target and tests. CIP and fuzz cases also perform the
+**Run live suite** after attesting authorization. The main screen shows **Runnable tests**
+on the left and **Live Logs** on the right, including the number of selected test operations
+finished and the current operation. Finished does not mean passed. Select a test to view a
+plain-language description and result; enable **Advanced details (raw evidence)** to
+inspect packet evidence. An **Observed** result is not a security verdict.
+
+To run one or more executable tests, click their checkboxes, or use **Ctrl+click** and
+**Shift+click** on the test rows. **Select all runnable** includes the fuzz cases;
+**Clear selection** deselects them. Click **Run selected** and confirm the target and
+tests. Fuzzing always requires separate approval. CIP and fuzz cases also perform the
 necessary session registration and cleanup; session-related cases perform those supporting
-operations as needed. Non-executable coverage, manual-review and excluded rows cannot be
-run this way. Device applicability is not detected automatically. Click **Attack surface**
+operations as needed. The **Excel cases (46)** tab lists the workbook cases and their coverage.
+Select a case to see its limitations and any related runnable test IDs. A partial mapping
+is not a complete implementation of the workbook case; select the related IDs in the
+**Runnable tests** tab to run those operations. Manual, profile-dependent and excluded
+cases cannot be run. Open **Coverage & manual** to inspect non-executable coverage,
+manual-review and excluded rows; they cannot be selected for execution. Device applicability
+is not detected automatically. Click **Attack surface**
 next to **Load sample** to open the review window, select an area, record a decision and
 supporting evidence, and save the review before exporting. Closing the review window retains
 unsaved edits in memory; save them before export. Changing the scope requires a new assessment;
-existing evidence cannot be relabeled with another target. New assessments replace
-in-memory evidence, so export anything that must be retained.
+existing evidence cannot be relabeled with another target. When replacing existing evidence,
+choose **Yes** to export it first, **No** to discard it, or **Cancel** to keep it. A cancelled
+or failed export leaves the assessment in place. Save unsaved reviews before exporting; if
+the scope was changed, restore it before exporting the previous assessment.
 
 Each selected run replaces the previous assessment, just like a full suite. Export the
 result before starting another run if it must be retained. Reports identify all selected
@@ -50,11 +62,11 @@ phase retains its own pacing and work budget.
 
 ### Bounded fuzz tests
 
-Fuzzing is separate from the existing read-only live suite. In **Live tests & coverage**,
+Fuzzing is separate from the existing read-only live suite. In **Runnable tests**,
 click **Run fuzz tests** after entering the target and operator reference and checking
 the authorization box. Confirm the additional warning only when fuzzing that specific
 target is approved. Wait for the run to finish, inspect the `FUZ-01` through `FUZ-04`
-rows, and click **Export JSON**. Starting either suite replaces the current evidence and
+rows, and click **Export PDF**. Starting either suite replaces the current evidence and
 reviews, so export the previous assessment first.
 
 The four fixed cases probe class, instance and attribute boundaries and a mismatched CIP
@@ -67,7 +79,7 @@ This is not exhaustive fuzzing or protocol conformance testing.
 For CLI use, from the repository root, replace the example IP with the authorized target:
 
 ```powershell
-.\.venv\Scripts\python.exe .\plugins\ethernetip\main.py fuzz 192.0.2.10 --authorized --fuzz-authorized --operator "Name / approved ticket" --output "fuzz.json"
+.\.venv\Scripts\python.exe .\plugins\ethernetip\main.py fuzz 192.0.2.10 --authorized --fuzz-authorized --operator "Name / approved ticket" --output "fuzz.pdf"
 ```
 
 The output directory must already exist. The example IP is a documentation address, not a
@@ -162,13 +174,13 @@ writes, flooding, and other excluded cases are not enabled by appearing in the c
 Authorized single-target request, using a documentation address as a placeholder:
 
 ```powershell
-python main.py discover 192.0.2.10 --authorized --operator "Tester / approved ticket OT-123" --timeout 3 --output assessment.json
+python main.py discover 192.0.2.10 --authorized --operator "Tester / approved ticket OT-123" --timeout 3 --output assessment.pdf
 ```
 
 Run the bounded baseline after obtaining approval for the specific device:
 
 ```powershell
-python main.py test 192.0.2.10 --authorized --operator "Tester / approved lab ticket OT-123" --timeout 3 --output device-baseline.json
+python main.py test 192.0.2.10 --authorized --operator "Tester / approved lab ticket OT-123" --timeout 3 --output device-baseline.pdf
 ```
 
 To run selected cases instead, repeat the `--case` option, for example
@@ -222,9 +234,14 @@ deletion. Check device logs or vendor instrumentation for that assertion.
 
 ## Evidence and Reports
 
-JSON exports include the scoped target, operator reference, authorization attestation,
-live/sample/manual mode, request timestamp (when probed), outcome, identity metadata,
-informational observations, all review decisions, limitations and reference links.
+PDF exports include the scoped target, operator reference, authorization attestation,
+live/sample/manual mode, UTC start and completion times, outcome, device identity details,
+informational observations, all review decisions, spreadsheet coverage, abbreviations,
+limitations and reference links. Times are unavailable when no timed live operation was
+recorded; a completion time includes session cleanup. **Export PDF** opens a save dialog;
+the CLI `--output` argument must end in `.pdf`. CLI standard output remains JSON for
+compatibility with existing scripts. Characters unsupported by the PDF's font are
+shown as Unicode escapes so their values are not lost.
 Live-suite reports additionally contain exact bounded request/response hex, partial
 response bytes on receive failures, UTC timestamps, timings, CIP general/additional
 status, decoded values, per-test exchange indices, consistency observations and the
@@ -240,7 +257,7 @@ behavior, source network, logs, reproducibility and any demonstrated operational
 Do not assign vulnerability severity solely because the client rejected a response.
 Only explicitly saved operator decisions are exported. Review decisions other than
 **Not assessed** require evidence or a rationale; they are not machine-verified results.
-Reports are local plaintext files without encryption or signing. Store them in an
+Reports are local files without encryption or signing. Store them in an
 approved evidence location and avoid entering passwords or other secrets in notes.
 Keep original packet captures, change approvals and inventory records separately when
 your evidence handling process requires them.
@@ -255,7 +272,7 @@ your evidence handling process requires them.
 - `modules/fuzz_tests.py`: separately authorized bounded CIP boundary and malformed-path tests.
 - `core/connection.py`, `core/session.py`, `core/cip.py`: bounded encapsulation transport,
   session lifecycle, CPF/CIP parsing and allowlisted Identity reads.
-- `reports/report.py`: scoped JSON report generation.
+- `reports/report.py`, `reports/pdf.py`: scoped assessment and PDF report generation.
 - `tests/`: offline protocol, CLI, report and native desktop workflow tests.
 - Remaining module skeletons, `dos/` and `fuzzing/`: not connected to the workbench.
 

@@ -194,6 +194,33 @@ class LiveSuiteTests(unittest.TestCase):
         self.assertTrue(device.closed)
         self.assertEqual(run['test_results'][5]['status'], 'not_run')
 
+    def test_cleanup_failure_marks_run_incomplete_and_preserves_cancellation(self):
+        for cancel_after_read in (False, True):
+            with self.subTest(cancel_after_read=cancel_after_read):
+                device = DeviceSocket()
+                cancel = threading.Event()
+                original_send = device.sendall
+
+                def send_or_fail(request):
+                    command = HEADER.unpack(request[:24])[0]
+                    if command == 0x66:
+                        raise OSError('cleanup failed')
+                    original_send(request)
+                    if command == 0x6F and cancel_after_read:
+                        cancel.set()
+
+                with patch.object(device, 'sendall', side_effect=send_or_fail), patch(
+                    'core.connection.socket.create_connection', return_value=device
+                ), patch('threading.Event.wait', return_value=False):
+                    run = LiveTestRunner().run('192.0.2.10', 'Lab', True, cancel)
+                self.assertEqual(run['outcome'], 'cancelled' if cancel_after_read else 'incomplete')
+                self.assertIn('cleanup failed', run['stop_reason'])
+                if cancel_after_read:
+                    self.assertIn('Cancelled', run['stop_reason'])
+                cleanup = next(result for result in run['test_results'] if result['id'] == 'ENIP-05')
+                self.assertEqual(cleanup['status'], 'inconclusive')
+                self.assertTrue(device.closed)
+
     def test_malformed_cip_response_becomes_developer_candidate(self):
         from modules.discovery import Identity
         from modules.security import SecurityAssessment

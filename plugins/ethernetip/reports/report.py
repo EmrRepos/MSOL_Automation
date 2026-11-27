@@ -1,17 +1,20 @@
-import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from reportlab.platypus.doctemplate import LayoutError
+
 from modules.discovery import Identity, validate_target
 from modules.live_tests import coverage_matrix
 from modules.security import REFERENCES, SecurityAssessment
+from reports.pdf import save_pdf
 
 
 class ReportGenerator:
     def build(self, target: str, operator: str, authorized: bool, mode: str,
               outcome: str, identities: list[Identity], assessment: SecurityAssessment,
-              observed_at: str | None = None, live_run: dict | None = None) -> dict:
+              observed_at: str | None = None, live_run: dict | None = None,
+              completed_at: str | None = None, request_description: str | None = None) -> dict:
         if mode not in ('live', 'sample', 'manual'):
             raise ValueError('Unknown evidence mode.')
         target = validate_target(target)
@@ -52,8 +55,11 @@ class ReportGenerator:
                 'transport': 'TCP 44818',
                 'request': ('Bounded mixed baseline and fuzz selection' if mixed else
                             'Bounded CIP fuzz suite' if fuzz else
-                            'Bounded Identity/CIP baseline' if live_run else 'ListIdentity (0x0063)'),
-                'observed_at_utc': observed_at, 'outcome': outcome,
+                            'Bounded Identity/CIP baseline' if live_run else
+                            (request_description or 'ListIdentity (0x0063)') if mode == 'live' else 'No live request'),
+                'observed_at_utc': observed_at,
+                'completed_at_utc': live_run.get('completed_at_utc') if live_run else completed_at,
+                'outcome': outcome,
             },
             'identities': [asdict(identity) for identity in identities],
             'observations': assessment.observations(identities),
@@ -91,4 +97,9 @@ class ReportGenerator:
         }
 
     def save(self, path: str, report: dict) -> None:
-        Path(path).write_text(json.dumps(report, indent=2, ensure_ascii=True) + '\n', encoding='utf-8')
+        if Path(path).suffix.lower() != '.pdf':
+            raise ValueError('Report output must use a .pdf extension.')
+        try:
+            save_pdf(path, report)
+        except LayoutError as exc:
+            raise ValueError(f'Could not format the PDF report: {exc}') from exc

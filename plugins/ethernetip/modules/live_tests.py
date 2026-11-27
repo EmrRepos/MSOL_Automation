@@ -239,6 +239,14 @@ class LiveTestRunner:
         except (RunStopped, OSError, ValueError) as exc:
             run['outcome'] = 'cancelled' if cancel.is_set() else 'incomplete'
             run['stop_reason'] = str(exc)
+        if results['ENIP-05']['status'] == 'inconclusive':
+            if run['outcome'] == 'completed':
+                run['outcome'] = 'incomplete'
+                run['stop_reason'] = results['ENIP-05']['detail']
+            elif run['stop_reason']:
+                run['stop_reason'] += f"; {results['ENIP-05']['detail']}"
+        if progress and results['ENIP-05']['status'] != 'not_run':
+            progress('ENIP-05: request finished; see final result for classification.')
         if selected_set and run['outcome'] == 'completed' and any(
             results[identifier]['status'] == 'not_run' for identifier in selected_set
         ):

@@ -1,7 +1,9 @@
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from pathlib import Path
 from unittest.mock import patch
 
 from main import main
@@ -37,6 +39,25 @@ class CLITests(unittest.TestCase):
         report = json.loads(output.getvalue())
         self.assertEqual(report['scope']['mode'], 'live')
         self.assertEqual(report['identities'][0]['product_name'], 'Lab PLC')
+
+    def test_cli_exports_pdf_and_rejects_json_before_network(self):
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'device.pdf'
+            with redirect_stdout(output), patch(
+                'main.Discovery.discover', return_value=parse_identity_payload(identity_payload())
+            ):
+                code = main(['discover', '192.0.2.10', '--authorized', '--operator', 'Lab / ticket',
+                             '--output', str(path)])
+            self.assertEqual(code, 0)
+            self.assertTrue(path.read_bytes().startswith(b'%PDF-'))
+            report = json.loads(output.getvalue())
+            self.assertIsNotNone(report['scope']['completed_at_utc'])
+        with redirect_stderr(io.StringIO()), patch('main.Discovery.discover') as discover:
+            with self.assertRaises(SystemExit):
+                main(['discover', '192.0.2.10', '--authorized', '--operator', 'Lab',
+                      '--output', 'device.json'])
+            discover.assert_not_called()
 
     def test_network_failure_is_inconclusive(self):
         output = io.StringIO()

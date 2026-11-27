@@ -84,6 +84,32 @@ class UITests(unittest.TestCase):
         self.assertTrue(report['scope']['authorization_attested'])
         self.assertIsNotNone(report['scope']['observed_at_utc'])
 
+    def test_probe_worker_records_completion_time_for_report(self):
+        self.app.operator.set('Lab / ticket')
+        self.app.authorized.set(True)
+        with patch('ui.messagebox.askyesno', return_value=True), patch('ui.threading.Thread'):
+            self.app.start_probe()
+        with patch('ui.Discovery.discover', return_value=[]):
+            self.app._probe_worker('192.0.2.10')
+        self.app._poll()
+        scope = self.app.build_report()['scope']
+        self.assertIsNotNone(scope['observed_at_utc'])
+        self.assertIsNotNone(scope['completed_at_utc'])
+        self.assertLessEqual(scope['observed_at_utc'], scope['completed_at_utc'])
+
+    def test_failed_suite_reports_its_operation_and_completion_time(self):
+        self.app.operator.set('Lab / ticket')
+        self.app.authorized.set(True)
+        with patch('ui.messagebox.askyesno', return_value=True), patch('ui.threading.Thread'):
+            self.app.start_suite()
+        with patch('ui.LiveTestRunner.run', side_effect=RuntimeError('unexpected failure')):
+            self.app._suite_worker('192.0.2.10', 'Lab / ticket', self.app.cancel_run)
+        self.app._poll()
+        scope = self.app.build_report()['scope']
+        self.assertEqual(scope['request'], 'Bounded Identity/CIP baseline')
+        self.assertIsNotNone(scope['completed_at_utc'])
+        self.assertIn('unexpected failure', scope['outcome'])
+
     def test_desktop_window_layout(self):
         self.root.deiconify()
         for width, height in ((1180, 820), (820, 650)):
@@ -91,7 +117,8 @@ class UITests(unittest.TestCase):
             self.root.update()
             for widget in (self.app.probe_button, self.app.export_button, self.app.surface_button,
                            self.app.suite_button, self.app.stop_button, self.app.fuzz_button,
-                           self.app.selected_button,
+                           self.app.selected_button, self.app.select_all_button, self.app.clear_button,
+                           self.app.coverage_button,
                            self.app.live_tree, self.app.live_details, self.app.inventory):
                 with self.subTest(size=(width, height), widget=widget):
                     self.assertTrue(widget.winfo_ismapped())
@@ -102,6 +129,17 @@ class UITests(unittest.TestCase):
                                          self.root.winfo_rooty() + self.root.winfo_height())
             self.assertLessEqual(self.app.live_tree.winfo_rootx() + self.app.live_tree.winfo_width(),
                                  self.app.inventory.winfo_rootx())
+            self.assertGreaterEqual(self.app.live_tree.winfo_height(), 100)
+            self.app.test_tabs.select(1)
+            self.root.update()
+            self.assertTrue(self.app.workbook_tree.winfo_ismapped())
+            self.assertGreaterEqual(self.app.workbook_tree.winfo_height(), 100)
+            self.assertLessEqual(self.app.workbook_tree.winfo_rootx() + self.app.workbook_tree.winfo_width(),
+                                 self.app.inventory.winfo_rootx())
+            self.assertLessEqual(self.app.workbook_details.winfo_rooty() + self.app.workbook_details.winfo_height(),
+                                 self.root.winfo_rooty() + self.root.winfo_height())
+            self.app.test_tabs.select(0)
+            self.root.update()
         self.app.surface_button.invoke()
         self.root.update()
         self.assertTrue(self.app.catalog.winfo_ismapped())
@@ -174,7 +212,7 @@ class UITests(unittest.TestCase):
         self.assertEqual(self.app.build_report()['live_test_run']['outcome'], 'cancelled')
         self.app.live_tree.selection_set('CIP-01')
         self.app._select_live_test()
-        self.assertIn('not_run', self.app.live_details.get('1.0', 'end'))
+        self.assertIn('Not run', self.app.live_details.get('1.0', 'end'))
 
     def test_single_live_selection_starts_only_selected_case(self):
         self.app.operator.set('Lab / ticket')
@@ -201,8 +239,8 @@ class UITests(unittest.TestCase):
             self.app._suite_worker(*thread.call_args.kwargs['args'])
         self.app._poll()
         self.assertEqual(device.commands, [0x65, 0x6F, 0x66])
-        self.assertEqual(self.app.live_tree.item('CIP-03', 'values')[1], 'observed')
-        self.assertEqual(self.app.live_tree.item('CIP-04', 'values')[1], 'not_run')
+        self.assertEqual(self.app.live_tree.item('CIP-03', 'values')[1], '[i] Observed')
+        self.assertEqual(self.app.live_tree.item('CIP-04', 'values')[1], '[-] Not run')
         report = self.app.build_report()
         self.assertEqual(report['live_test_run']['selected_case'], 'CIP-03')
         self.assertEqual(report['reproduction']['cli_arguments'][-2:], ['--case', 'CIP-03'])
@@ -239,9 +277,9 @@ class UITests(unittest.TestCase):
         self.assertEqual([device.requests[1][-1], device.requests[2][-1]], [2, 4])
         report = self.app.build_report()
         self.assertEqual(report['live_test_run']['selected_cases'], ['CIP-02', 'CIP-04'])
-        self.assertEqual(self.app.live_tree.item('CIP-02', 'values')[1], 'observed')
-        self.assertEqual(self.app.live_tree.item('CIP-04', 'values')[1], 'observed')
-        self.assertEqual(self.app.live_tree.item('CIP-03', 'values')[1], 'not_run')
+        self.assertEqual(self.app.live_tree.item('CIP-02', 'values')[1], '[i] Observed')
+        self.assertEqual(self.app.live_tree.item('CIP-04', 'values')[1], '[i] Observed')
+        self.assertEqual(self.app.live_tree.item('CIP-03', 'values')[1], '[-] Not run')
 
     def test_ctrl_click_selects_multiple_test_rows(self):
         self.root.deiconify()
@@ -257,6 +295,90 @@ class UITests(unittest.TestCase):
             tree.event_generate(release, x=x + 5, y=y + height // 2)
             self.root.update()
         self.assertEqual(set(tree.selection()), {'CIP-01', 'CIP-03'})
+
+    def test_checkboxes_select_and_toggle_independently(self):
+        self.root.deiconify()
+        self.root.update()
+        tree = self.app.live_tree
+        for identifier in ('ENIP-01', 'ENIP-02', 'ENIP-01'):
+            tree.see(identifier)
+            self.root.update()
+            x, y, _, height = tree.bbox(identifier, '#0')
+            tree.event_generate('<Button-1>', x=x + 5, y=y + height // 2)
+            tree.event_generate('<ButtonRelease-1>', x=x + 5, y=y + height // 2)
+            self.root.update()
+        self.assertEqual(tree.selection(), ('ENIP-02',))
+        self.assertEqual(tree.item('ENIP-01', 'text'), '[ ]')
+        self.assertEqual(tree.item('ENIP-02', 'text'), '[x]')
+
+    def test_select_all_includes_fuzz_and_still_requires_approval(self):
+        self.app.operator.set('Lab / ticket')
+        self.app.authorized.set(True)
+        self.app.select_all_runnable()
+        self.assertEqual(set(self.app.live_tree.selection()), set(self.app.live_tree.get_children()))
+        with patch('ui.messagebox.askyesno', side_effect=[True, False]) as confirm, patch('ui.threading.Thread') as thread:
+            self.app.start_selected()
+        self.assertIn('Fuzzing can crash', confirm.call_args_list[1].args[1])
+        thread.assert_not_called()
+        self.app.clear_selection()
+        self.assertEqual(self.app.live_tree.selection(), ())
+
+    def test_progress_counts_only_selected_finished_operations(self):
+        self.app._begin_progress(('CIP-01', 'FUZ-02', 'FUZ-03'))
+        for message in ('ENIP-04: request finished; supporting session',
+                        'CIP-01: starting read',
+                        'CIP-01: request finished; see final result',
+                        'CIP-01: observed - response',
+                        'FUZ-02: starting fuzz',
+                        'FUZ-02: inconclusive - timeout',
+                        'FUZ-03: not_run - cancelled'):
+            self.app._record_progress(message)
+        self.assertEqual(self.app.finished_cases, {'CIP-01', 'FUZ-02'})
+        self.assertIn('2 / 3 selected tests finished', self.app.progress_text.get())
+
+    def test_replacement_export_choice_and_cancel_preserve_evidence(self):
+        self.app.load_sample()
+        identity = self.app.identities[0]
+        with patch('ui.messagebox.askyesnocancel', return_value=None):
+            self.app.new_assessment()
+        self.assertEqual(self.app.identities, [identity])
+        with patch('ui.messagebox.askyesnocancel', return_value=True), patch(
+            'ui.filedialog.asksaveasfilename', return_value=''
+        ):
+            self.app.new_assessment()
+        self.assertEqual(self.app.identities, [identity])
+        with patch('ui.messagebox.askyesnocancel', return_value=True), patch(
+            'ui.filedialog.asksaveasfilename', return_value='report.pdf'
+        ), patch('ui.ReportGenerator.save', side_effect=OSError('disk error')), patch('ui.messagebox.showerror') as error:
+            self.app.new_assessment()
+        error.assert_called_once()
+        self.assertEqual(self.app.identities, [identity])
+        with patch('ui.messagebox.askyesnocancel', return_value=True), patch(
+            'ui.filedialog.asksaveasfilename', return_value='report.pdf'
+        ), patch('ui.ReportGenerator.save') as save:
+            self.app.new_assessment()
+        save.assert_called_once()
+        self.assertEqual(self.app.identities, [])
+        self.assertEqual(self.app.mode, 'manual')
+
+    def test_replacement_export_blocks_unsaved_review_and_changed_scope(self):
+        self.app.load_sample()
+        self.app.catalog.selection_set('EIP-01')
+        self.app._select_surface()
+        self.app.notes.insert('1.0', 'Unsaved evidence')
+        with patch('ui.messagebox.askyesnocancel', return_value=True), patch('ui.messagebox.showwarning') as warning:
+            self.app.new_assessment()
+        warning.assert_called_once()
+        self.assertEqual(self.app.notes.get('1.0', 'end').strip(), 'Unsaved evidence')
+        self.app.notes.delete('1.0', 'end')
+        self.app.target.set('192.0.2.11')
+        with patch('ui.messagebox.askyesnocancel', return_value=True), patch('ui.messagebox.showerror') as error:
+            self.app.new_assessment()
+        error.assert_called_once()
+        self.assertEqual(self.app.scope_target, '192.0.2.10')
+        with patch('ui.messagebox.askyesnocancel', return_value=False):
+            self.app.new_assessment()
+        self.assertEqual(self.app.scope_target, '192.0.2.11')
 
     def test_mixed_selection_requires_additional_fuzz_confirmation(self):
         self.app.operator.set('Lab / ticket')
@@ -285,26 +407,54 @@ class UITests(unittest.TestCase):
         ):
             self.app._suite_worker(*thread.call_args.kwargs['args'])
         self.app._poll()
-        self.assertEqual(self.app.live_tree.item('CIP-01', 'values')[1], 'observed')
-        self.assertEqual(self.app.live_tree.item('FUZ-02', 'values')[1], 'observed')
+        self.assertEqual(self.app.live_tree.item('CIP-01', 'values')[1], '[i] Observed')
+        self.assertEqual(self.app.live_tree.item('FUZ-02', 'values')[1], '[i] Observed')
         self.assertEqual(self.app.build_report()['live_test_run']['selected_cases'], ['CIP-01', 'FUZ-02'])
         self.app.live_tree.selection_set('FUZ-02')
         self.app._select_live_test()
+        self.assertIn('CIP status', self.app.live_details.get('1.0', 'end'))
+        self.app.advanced_details.set(True)
+        self.app._select_live_test()
         self.assertIn('"command": "0x006F"', self.app.live_details.get('1.0', 'end'))
 
-    def test_non_executable_row_blocks_entire_multiple_selection(self):
-        self.app.live_tree.selection_set(('CIP-01', 'ETH-AUTH-001'))
-        with patch('ui.messagebox.showinfo') as info, patch('ui.threading.Thread') as thread:
-            self.app.start_selected()
-        self.assertIn('ETH-AUTH-001', info.call_args.args[1])
-        thread.assert_not_called()
+    def test_non_executable_rows_are_in_coverage_not_runnable_list(self):
+        self.assertFalse(self.app.live_tree.exists('ETH-AUTH-001'))
+        self.assertTrue(self.app.coverage_tree.exists('ETH-AUTH-001'))
+        self.app.show_coverage()
+        self.root.update()
+        self.assertTrue(self.app.coverage_tree.winfo_ismapped())
+        self.app.coverage_tree.selection_set('ETH-AUTH-001')
+        self.app._select_coverage()
+        self.assertIn('excluded_active_write', self.app.coverage_details.get('1.0', 'end'))
 
-    def test_no_selection_or_non_executable_case_does_not_start_test(self):
+    def test_workbook_tab_lists_all_cases_and_explains_coverage(self):
+        from modules.test_plan import BASELINE_CASES
+
+        self.root.deiconify()
+        self.app.test_tabs.select(1)
+        self.root.update()
+        tree = self.app.workbook_tree
+        self.assertTrue(tree.winfo_ismapped())
+        self.assertEqual(set(tree.get_children()), {case.identifier for case in BASELINE_CASES})
+        self.assertEqual(tree.item('ETH-FUZ-002', 'values')[1], 'Partial: fuzz')
+        tree.selection_set('ETH-FUZ-002')
+        self.app._select_workbook_case()
+        detail = self.app.workbook_details.get('1.0', 'end')
+        self.assertIn('Invalid Class IDs', detail)
+        self.assertIn('SRS: 15.005', detail)
+        self.assertIn('Related runnable tests: FUZ-01', detail)
+        self.assertIn('not all invalid class IDs', detail)
+        tree.selection_set('ETH-AUTH-001')
+        self.app._select_workbook_case()
+        detail = self.app.workbook_details.get('1.0', 'end')
+        self.assertIn('Excluded: write', detail)
+        self.assertIn('Related runnable tests: None', detail)
+        self.assertFalse(self.app.live_tree.exists('ETH-AUTH-001'))
+
+    def test_no_selection_does_not_start_test(self):
         with patch('ui.messagebox.showinfo') as info, patch('ui.threading.Thread') as thread:
             self.app.start_selected()
-            self.app.live_tree.selection_set('ETH-AUTH-001')
-            self.app.start_selected()
-        self.assertEqual(info.call_count, 2)
+        info.assert_called_once()
         thread.assert_not_called()
 
     def test_fuzz_requires_authorization_and_confirmation(self):
@@ -337,7 +487,7 @@ class UITests(unittest.TestCase):
         self.app._poll()
         self.app.live_tree.selection_set('FUZ-01')
         self.app._select_live_test()
-        self.assertIn('not_run', self.app.live_details.get('1.0', 'end'))
+        self.assertIn('Not run', self.app.live_details.get('1.0', 'end'))
         report = self.app.build_report()
         self.assertEqual(report['scope']['request'], 'Bounded CIP fuzz suite')
         self.assertTrue(report['live_test_run']['fuzz_authorization_attested'])

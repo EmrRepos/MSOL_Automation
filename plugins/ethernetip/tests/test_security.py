@@ -1,7 +1,7 @@
-import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from modules.discovery import parse_identity_payload
 from modules.security import REVIEW_STATUSES, SURFACES, SecurityAssessment
@@ -37,18 +37,68 @@ class SecurityTests(unittest.TestCase):
         self.assertIn('Does not establish', result[0]['limits'])
         self.assertEqual(assessment.catalog()[0]['status'], 'Not assessed')
 
-    def test_report_round_trip_and_sample_label(self):
+    def test_pdf_report_and_sample_label(self):
         generator = ReportGenerator()
         report = generator.build('192.0.2.10', 'Lab / ticket 123', False, 'sample',
                                  'Synthetic data', parse_identity_payload(identity_payload()),
                                  SecurityAssessment())
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / 'report.json'
+            path = Path(directory) / 'report.pdf'
             generator.save(str(path), report)
-            self.assertEqual(json.loads(path.read_text(encoding='utf-8')), report)
+            self.assertTrue(path.read_bytes().startswith(b'%PDF-'))
+        with patch('reports.pdf.SimpleDocTemplate') as document:
+            generator.save('report.pdf', report)
+        story = document.return_value.build.call_args.args[0]
+        content = '\n'.join(item.getPlainText() for item in story if hasattr(item, 'getPlainText'))
+        self.assertIn('SYNTHETIC SAMPLE DATA', content)
+        self.assertIn('Lab PLC', content)
+        self.assertIn('No timed live operation is recorded', content)
+        self.assertIn('ETH-ENUM-001', content)
+        self.assertIn('ETH-LOG-004', content)
+        self.assertIn('Abbreviations', content)
+        self.assertIn('CIP: Common Industrial Protocol', content)
         self.assertEqual(report['scope']['mode'], 'sample')
         self.assertFalse(report['scope']['authorization_attested'])
         self.assertEqual(len(report['attack_surface_reviews']), len(SURFACES))
+
+    def test_pdf_suite_contains_times_results_and_packet_evidence(self):
+        from modules.live_tests import LiveTestRunner
+        from test_live_tests import DeviceSocket
+
+        with patch('core.connection.socket.create_connection', return_value=DeviceSocket()), patch(
+            'threading.Event.wait', return_value=False
+        ):
+            run = LiveTestRunner().run('192.0.2.10', 'Lab / ticket', True, case_id='CIP-01')
+        generator = ReportGenerator()
+        report = generator.build('192.0.2.10', 'Lab / ticket', True, 'live', run['outcome'],
+                                 [], SecurityAssessment(), run['started_at_utc'], live_run=run)
+        with patch('reports.pdf.SimpleDocTemplate') as document:
+            generator.save('report.pdf', report)
+        story = document.return_value.build.call_args.args[0]
+        content = '\n'.join(item.getPlainText() for item in story if hasattr(item, 'getPlainText'))
+        self.assertIn(run['started_at_utc'], content)
+        self.assertIn(run['completed_at_utc'], content)
+        self.assertIn('CIP-01 - Identity instance 1 / vendor_id', content)
+        self.assertIn('Status: observed', content)
+        self.assertIn('Status: not_run', content)
+        self.assertIn('ETH-ENUM-001', content)
+        self.assertIn('partial_live_read_only', content)
+        self.assertIn(run['evidence_sha256'], content)
+        self.assertIn(run['exchanges'][0]['request_hex'], content)
+
+    def test_report_rejects_non_pdf_extension(self):
+        with self.assertRaisesRegex(ValueError, 'pdf extension'):
+            ReportGenerator().save('report.json', {})
+
+    def test_pdf_preserves_unsupported_unicode_as_escaped_text(self):
+        report = ReportGenerator().build('192.0.2.10', 'Lab \u0915 / ticket', False, 'sample',
+                                         'Synthetic data', [], SecurityAssessment())
+        with patch('reports.pdf.SimpleDocTemplate') as document:
+            ReportGenerator().save('report.pdf', report)
+        story = document.return_value.build.call_args.args[0]
+        content = '\n'.join(item.getPlainText() for item in story if hasattr(item, 'getPlainText'))
+        self.assertIn(r'Lab \u0915 / ticket', content)
+        self.assertIn('Unicode escapes', content)
 
     def test_report_scope_validation(self):
         for target, operator, authorized, mode in (
