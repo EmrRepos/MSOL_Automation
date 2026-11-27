@@ -1,133 +1,163 @@
 # MSOL Automation
 
+MSOL Automation provides two desktop frameworks for testing authorized devices:
+
+- **USB:** discover serial/COM devices, run USB validation and security
+  reviews, use a serial console, and capture or analyze USB traffic.
+- **EtherNet/IP:** inspect a single authorized target, run bounded baseline or
+  selected tests, and record attack-surface review evidence.
+
+Use the tools only with permission and an approved scope. Live tests can affect
+devices or processes; use a lab or approved maintenance window, and have a
+recovery plan. A completed run does not by itself prove a device is secure.
+
 ## Setup
 
-Install Python 3.14 x64 for the combined Windows USB and EtherNet/IP
-environment. From the repository root, run:
+The shared environment is tested on **Windows x64 with Python 3.14 x64**.
+Install Python first, then open PowerShell in the repository root:
 
 ```powershell
 py -3.14 setup_environment.py
 ```
 
-This creates `.venv` if needed, installs both frameworks' dependencies from
-the root [requirements.txt](requirements.txt), and runs `pip check`. An existing
-valid `.venv` with the same Python major/minor version is reused, not replaced.
-Rerun the command after dependency changes. Python and internet access are
-required; the script does not install Python itself. A requirements file is a
-pip dependency list and cannot create an environment by itself.
+The script creates or reuses `.venv`, installs the packages listed in
+[requirements.txt](requirements.txt), and checks for dependency conflicts.
+Internet access is needed for the initial installation. Run the same command
+after dependencies change. If an existing environment uses a different Python
+version or is invalid, setup reports an error instead of replacing it.
 
-## Run
+## Start a framework
 
-Select one USB or EtherNet/IP framework from the repository root:
+Run these commands from the repository root:
 
 ```powershell
+# See available frameworks
 .\.venv\Scripts\python.exe launcher.py --list
+
+# Open the USB application
 .\.venv\Scripts\python.exe launcher.py usb
+
+# Open the EtherNet/IP application
 .\.venv\Scripts\python.exe launcher.py ethernetip
-.\.venv\Scripts\python.exe launcher.py ethernetip assess
-.\.venv\Scripts\python.exe launcher.py ethernetip coverage
 ```
 
-With no plugin name, the launcher lists the available plugins. The selected
-application runs in a separate process with the same Python interpreter and
-working directory. Its exit code is returned by the launcher. USB opens the
-existing desktop UI; EtherNet/IP opens its UI by default or receives the
-remaining command-line arguments. Tests are started by the operator in the UI;
-USB automatically scans for COM ports, but opening a UI does not start tests or
-send EtherNet/IP traffic.
+Each command opens the selected application; choose and start tests in its UI.
+Starting the USB application scans for COM ports. Opening the EtherNet/IP UI
+does not itself send traffic to a target.
 
-After setup, see
-the [USB](plugins/usb/README.md) and [EtherNet/IP](plugins/ethernetip/README.md)
-documentation for prerequisites, test workflows, and authorization and safety
-requirements. EtherNet/IP CLI authorization checks remain in effect. USB
-automated reports and its Report Center use `reports/usb` under the launcher's
-current working directory; `usb_tests.db` remains in that working directory.
-The EtherNet/IP GUI export dialog defaults to `reports/ethernetip`. Exporting
-is still manual, and EtherNet/IP CLI reports are saved only with `--output`
-(for example, `--output reports\ethernetip\assessment.json`). Both applications
-allow a custom destination for manually exported reports. Existing reports are
-not moved. USB device profiles remain under `plugins/usb/device_profiles`.
+### USB: first run
 
-## Architecture and refactoring decisions
+1. Connect the authorized device, launch USB, and select its COM port. Check
+   the displayed device identity.
+2. Select **Standard USB Validation**. Leave **Hardware mode** off for
+   metadata-only checks, or enable it for supported live USB/serial access.
+   Hardware-dependent checks can be blocked when evidence is unavailable.
+3. Click **START TEST**. The seven grouped checks appear in the
+   **Standard USB Validation** tab; switch to **Live Event Log** for the log.
+4. Wait for the run and report saving to finish. Checks run once, with a
+   10-second post-check completion period. Use **VIEW REPORTS** to open saved
+   results.
+
+The USB application also offers separate profiles, a serial console, and
+firmware USB capture. Capture requires additional tools and approval and can
+record traffic from other devices on the same hub. See the
+[USB guide](plugins/usb/README.md) for prerequisites, test limitations,
+capture setup and troubleshooting.
+
+### EtherNet/IP: first run
+
+1. Launch EtherNet/IP and select **Load sample** to explore the UI without
+   sending network traffic.
+2. For a real assessment, enter the approved target IPv4 address and operator
+   or scope reference, and attest authorization in the UI.
+3. In **Runnable tests**, select one or more applicable cases and click
+   **Run selected**, or choose **Run live suite** for the bounded baseline.
+   Fuzz tests require separate approval and confirmation.
+4. Review the results and use **Export PDF** to save them. The export dialog
+   also allows JSON.
+
+The **Excel cases (46)** tab shows the baseline workbook cases and their
+coverage. Some are only partially covered, manual, profile-dependent or
+excluded; they are not all runnable. Device applicability is not automatically
+determined. Export evidence before starting another assessment if it must be
+retained, since a new run replaces the current assessment.
+
+See the [EtherNet/IP guide](plugins/ethernetip/README.md) for test selection,
+traffic limits, safety requirements and interpretation of results.
+
+## Reports and results
+
+When launched from the repository root, default report locations are:
+
+| Framework | Location | Format and saving |
+| --- | --- | --- |
+| USB | `reports\usb` | Automated tests save PDF and CSV reports. The Report Center can open them. |
+| EtherNet/IP | `reports\ethernetip` | The UI export dialog defaults here; saving a PDF or JSON report is manual. |
+
+USB test history is stored in `usb_tests.db` in the working directory. Report
+paths are relative to the directory from which the launcher is run. Protect
+reports, logs and captures: they may contain device or assessment information.
+
+Interpret results in context: **BLOCKED**, **SKIPPED**, **ERROR** and
+**CANCELLED** are not passes. EtherNet/IP observations, timeouts and incomplete
+coverage do not establish a vulnerability or prove its absence.
+
+## EtherNet/IP command line
+
+The launcher forwards arguments to EtherNet/IP. These commands are offline:
+
+```powershell
+# Show the assessment catalog and test coverage
+.\.venv\Scripts\python.exe launcher.py ethernetip assess
+.\.venv\Scripts\python.exe launcher.py ethernetip coverage
+
+# Show all EtherNet/IP CLI options
+.\.venv\Scripts\python.exe launcher.py ethernetip --help
+```
+
+Active commands require an explicitly authorized target, `--authorized`, and
+an operator/scope reference; fuzzing also requires separate authorization.
+CLI output is JSON on the console. To save a report, provide `--output` with a
+`.pdf` or `.json` path. See the
+[EtherNet/IP CLI guide](plugins/ethernetip/README.md#cli) for examples and
+the meaning of exit codes.
+
+## Repository layout
 
 ```text
 MSOL_Automation/
-|-- launcher.py
-|-- setup_environment.py
+|-- launcher.py              # Lists and launches a framework
+|-- setup_environment.py     # Creates or updates the shared environment
 |-- requirements.txt         # Dependencies for both frameworks
 |-- framework/
-|   |-- plugin_loader/       # Contract, discovery and process isolation
-|   |-- logging/             # Reserved for verified shared implementations
-|   |-- reporting/           # Reserved for verified shared implementations
-|   |-- configuration/       # Reserved for verified shared implementations
-|   `-- common_utils/        # Reserved for verified shared implementations
+|   `-- plugin_loader/       # Discovery, lifecycle and process isolation
 |-- plugins/
-|   |-- usb/
-|   |   |-- plugin.py        # Top-level adapter
-|   |   `-- main.py, core/, ui/, plugins/, device_profiles/, tests/
-|   `-- ethernetip/
-|       |-- plugin.py        # Top-level adapter
-|       `-- main.py, core/, modules/, reports/, ui.py, tests/
-`-- tests/                   # Launcher and lifecycle tests
+|   |-- usb/                 # USB application and tests
+|   `-- ethernetip/          # EtherNet/IP application and tests
+`-- tests/                   # Launcher and setup tests
 ```
 
-The adapters implement `FrameworkPlugin.initialize()`, `execute_tests()` and
-`shutdown()`. Here `execute_tests()` runs the selected application's existing
-workflow; in GUI mode it waits for the operator to close the application.
-`shutdown()` is called even if initialization or execution fails. The process
-boundary keeps the applications' conflicting legacy imports (`core`, `ui`, and
-USB's nested `plugins`) and their GUI event loops isolated. It also preserves
-their existing standalone entry points. Those internal imports have not yet
-been converted to root-qualified imports, so directly importing their internal
-modules as `plugins.usb.*` or `plugins.ethernetip.*` is not a supported API.
+The launcher discovers plugin adapters in `plugins`. The USB and EtherNet/IP
+adapters run their applications in separate processes. The other folders under
+`framework` are reserved for future shared implementations; protocol-specific
+code remains inside its plugin.
 
-Discovery scans `plugins` for packages containing `plugin.py`, without importing
-unselected plugins. A new plugin exports a `Plugin` subclass of
-`framework.plugin_loader.FrameworkPlugin` from that file. Its constructor accepts
-the forwarded argument sequence, and `execute_tests()` returns an integer exit
-code. Failures must be raised or returned as a nonzero exit code.
-
-### What was moved, kept, or removed
-
-- [launcher.py](launcher.py) lists and launches the chosen plugin, forwards
-  arguments, and ensures shutdown.
-- [base.py](framework/plugin_loader/base.py) defines the shared lifecycle;
-  [loader.py](framework/plugin_loader/loader.py) discovers and loads plugins;
-  [isolated.py](framework/plugin_loader/isolated.py) runs existing applications
-  in separate processes.
-- [USB plugin.py](plugins/usb/plugin.py) and
-  [EtherNet/IP plugin.py](plugins/ethernetip/plugin.py) adapt the existing
-  entry points without moving protocol-specific logic.
-- [test_launcher.py](tests/test_launcher.py) checks discovery, lifecycle,
-  argument forwarding, authorization and exit codes.
-  [test_project_layout.py](plugins/usb/tests/test_project_layout.py) reflects
-  the new USB package and adapter.
-- This README and the two plugin READMEs describe the launcher and adjusted
-  working-directory and test commands.
-- `plugins/usb/core/plugin_loader.py` is a separate legacy loader for USB test
-  modules, not the top-level framework loader; it remains in place. The active
-  USB test runner currently uses its own explicit test registry.
-- `plugins/usb/core/report_generator.py` produces USB PDF/CSV reports, while
-  `plugins/ethernetip/reports/report.py` builds scoped EtherNet/IP JSON evidence.
-  Their schemas and dependencies differ, so neither was moved into shared
-  reporting. USB device profiles and both applications' GUI logging also remain
-  protocol-specific. The other shared folders are intentionally empty until a
-  real common implementation is identified.
-- The empty, misspelled `plugins/usb/plugins/_init_.py` and
-  `plugins/usb/ui/_init_.py` were replaced with standard `__init__.py` files.
-  Package initializers were added for the new framework and plugin adapters
-  and existing source folders that lacked one.
-- All original protocol modules, test suites, dependencies, and standalone
-  entry points are retained. The EtherNet/IP `dos/` and `fuzzing/` skeletons
-  remain disconnected and are not enabled by discovery.
+To add a framework, create `plugins\<name>\__init__.py` and `plugin.py`.
+The latter exports a `Plugin` subclass of
+[`FrameworkPlugin`](framework/plugin_loader/base.py), accepting forwarded
+arguments and implementing `initialize()`, `execute_tests()` and `shutdown()`.
+`execute_tests()` returns an integer exit code. The launcher calls `shutdown()`
+even when initialization or execution fails.
 
 ## Verification
 
-Run the new offline launcher tests from the repository root:
+To run the offline launcher and setup tests from the repository root:
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
 ```
 
-Run each application's existing tests from its own directory, as described in
-its README. No test in the launcher suite connects to a physical device.
+For framework-specific tests and display requirements, see the
+[USB guide](plugins/usb/README.md#development-and-ci) and
+[EtherNet/IP guide](plugins/ethernetip/README.md#verification). Offline tests
+do not establish interoperability with a physical device.
