@@ -84,6 +84,8 @@ class TestRunner:
         pass_callback=None,
         suite_update=None,
         suite_finished=None,
+        finished_callback=None,
+        phase_callback=None,
     ):
 
         if self.running:
@@ -109,6 +111,8 @@ class TestRunner:
                         logger, progress_callback, suite_update or (lambda row: None),
                     )
                     completed_at = time.monotonic()
+                    if phase_callback:
+                        phase_callback("Checks complete; saving history and reports.")
                     try:
                         self.db.save_result(
                             result["started"], selected.get("name", "Unknown Device"),
@@ -123,6 +127,8 @@ class TestRunner:
                     if result["status"] == "PASS" and pass_callback:
                         pass_callback()
                     logger(f"[{result['status']}] Suite {result['run_id']} completed.")
+                    if phase_callback:
+                        phase_callback("Checks complete; finishing automatically after 10 seconds.")
                     self._wait_after_completion(completed_at, logger)
                 except Exception as error:
                     logger(f"[ERROR] Suite execution failed: {error}")
@@ -137,6 +143,8 @@ class TestRunner:
                     self.running = False
                     if suite_finished:
                         suite_finished(result)
+                    if finished_callback:
+                        finished_callback(result["status"] if result else "ERROR")
 
             self.worker_thread = threading.Thread(target=suite_worker, daemon=True)
             self.worker_thread.start()
@@ -145,6 +153,7 @@ class TestRunner:
         def worker():
 
             logger(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] START TEST: {profile}")
+            status = "ERROR"
             try:
 
                 logger(
@@ -161,6 +170,7 @@ class TestRunner:
 
                     if self._stop_requested.is_set():
 
+                        status = "CANCELLED"
                         logger(
                             "[WARN] Test Stopped By User"
                         )
@@ -172,6 +182,7 @@ class TestRunner:
                     progress_callback(i)
 
                     if self._stop_requested.wait(0.03):
+                        status = "CANCELLED"
                         logger("[WARN] Test Stopped By User")
                         progress_callback(0)
                         return
@@ -225,6 +236,7 @@ class TestRunner:
                 )
                 completed_at = time.monotonic()
                 if self._stop_requested.is_set():
+                    status = "CANCELLED"
                     logger("[WARN] Test stopped while the plugin was executing.")
                     progress_callback(0)
                     return
@@ -247,6 +259,9 @@ class TestRunner:
                     self._stop_requested.wait(0.02)
 
                 progress_callback(100)
+
+                if phase_callback:
+                    phase_callback("Checks complete; saving history and reports.")
 
                 #
                 # Save History
@@ -317,7 +332,8 @@ class TestRunner:
                 # Final Status
                 #
 
-                if result.get("status") == "PASS":
+                status = result.get("status", "UNKNOWN")
+                if status == "PASS":
 
                     if pass_callback:
 
@@ -329,10 +345,10 @@ class TestRunner:
 
                 else:
 
-                    logger(
-                        "[FAIL] Test Completed With Errors"
-                    )
+                    logger(f"[{status}] Test completed: {status}")
 
+                if phase_callback:
+                    phase_callback("Checks complete; finishing automatically after 10 seconds.")
                 self._wait_after_completion(completed_at, logger)
 
             except Exception as ex:
@@ -346,6 +362,8 @@ class TestRunner:
                 logger(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] STOP TEST: {profile}")
                 logger("--------------------")
                 self.running = False
+                if finished_callback:
+                    finished_callback(status)
 
         self.worker_thread = threading.Thread(
             target=worker,

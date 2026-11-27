@@ -1,119 +1,56 @@
-from PySide6.QtWidgets import (
-    QWidget,
-    QHBoxLayout,
-    QFrame,
-    QLabel,
-    QVBoxLayout
-)
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 
 class StatCard(QFrame):
-
-    def __init__(self, title, value="0", color="#0078D4"):
-
+    def __init__(self, title):
         super().__init__()
-
         self.setObjectName("StatCard")
-        self.setFixedHeight(80)
-        self.setMinimumWidth(180)
+        self.setMinimumWidth(120)
 
-        self.setStyleSheet(f"""
-            QFrame {{
-                background-color: {color};
-                border-radius: 12px;
-                color: white;
-            }}
-        """)
-
-        layout = QVBoxLayout()
-
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(2)
         self.title = QLabel(title)
-        self.title.setStyleSheet("""
-            font-size:18px;
-            font-weight:bold;
-            color:white;
-        """)
-
-        self.value = QLabel(value)
-        self.value.setStyleSheet("""
-            font-size:10px;
-            font-weight:bold;
-            color:white;
-        """)
-
+        self.title.setObjectName("CardTitle")
+        self.value = QLabel("0")
+        self.value.setObjectName("CardValue")
         layout.addWidget(self.title)
         layout.addWidget(self.value)
 
-        self.setLayout(layout)
-
 
 class DashboardPanel(QWidget):
-
     def __init__(self):
-
         super().__init__()
-
-        layout = QHBoxLayout()
-
-        self.devices_card = StatCard(
-            "TOTAL DEVICES",
-            "0",
-            "#0078D4"
-        )
-
-        self.failed_card = StatCard(
-            "FAILED",
-            "0",
-            "#FF0000"
-        )
-
-        self.tests_card = StatCard(
-            "TEST RUNS",
-            "0",
-            "#FF8C00"
-        )
-
-        self.pass_card = StatCard(
-            "PASSED",
-            "0",
-            "#006400"
-        )
-
-        layout.addWidget(self.devices_card)
-        layout.addWidget(self.failed_card)
-        layout.addWidget(self.tests_card)
-        layout.addWidget(self.pass_card)
-
-        self.setLayout(layout)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        self.devices_card = StatCard("COM ports")
+        self.tests_card = StatCard("Runs started")
+        self.pass_card = StatCard("Passed runs")
+        self.failed_card = StatCard("Failed runs")
+        self.other_card = StatCard("Other outcomes")
+        self.other_card.setToolTip("Blocked, skipped, cancelled, error or unknown runs")
+        for card in (
+            self.devices_card, self.tests_card, self.pass_card,
+            self.failed_card, self.other_card,
+        ):
+            layout.addWidget(card)
 
     def set_total_devices(self, count):
+        self.devices_card.value.setText(str(count))
 
-        self.devices_card.value.setText(
-            str(count)
-        )
-
-    def set_authorized_devices(self, count):
-
-        self.failed_card.value.setText(
-            str(count)
-        )
+    @staticmethod
+    def _increment(card):
+        card.value.setText(str(int(card.value.text()) + 1))
 
     def increment_test_runs(self):
+        self._increment(self.tests_card)
 
-        current = int(
-            self.tests_card.value.text()
-        )
-
-        self.tests_card.value.setText(
-            str(current + 1)
-        )
-
-    def increment_passed(self):
-
-        current = int(
-            self.pass_card.value.text()
-        )
-
-        self.pass_card.value.setText(
-            str(current + 1)
-        )
+    def record_run(self, status):
+        if status == "PASS":
+            card = self.pass_card
+        elif status == "FAIL":
+            card = self.failed_card
+        else:
+            card = self.other_card
+        self._increment(card)

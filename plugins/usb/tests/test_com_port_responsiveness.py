@@ -7,12 +7,15 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QPoint, QTimer
+from PySide6.QtGui import QPalette
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QPushButton
+from PySide6.QtWidgets import QApplication, QPushButton, QStyle, QStyleOptionComboBox
 
 from core.com_port_manager import COMPortManager
+from core.theme import LIGHT_THEME
 from ui.com_port_panel import COMPortPanel
+from ui.main_window import MainWindow
 
 
 def port_info(port="COM6", hwid="USB VID:PID=15A2:0400"):
@@ -176,6 +179,125 @@ class PanelResponsivenessTests(unittest.TestCase):
         self.wait_until(lambda: not self.panel._scan_in_progress)
         self.assertEqual(self.panel.devices, [])
         self.assertEqual(self.logs, [])
+
+    def test_new_port_does_not_replace_selected_device(self):
+        first = {"port": "COM6", "name": "First", "vid": "1111", "pid": "2222", "serial": "A"}
+        second = {"port": "COM7", "name": "Second"}
+        self.panel._apply_scan(([first], []), True)
+        self.panel._apply_scan(([first, second], [second]), False)
+        self.assertEqual(self.panel.current_device(), first)
+        self.assertIn("COM6", self.panel.selected_lbl.text())
+        self.assertIn("1111", self.panel.selected_lbl.text())
+        self.assertTrue(any("New COM Port Detected : COM7" in line for line in self.logs))
+        updated = dict(first, name="Updated identity")
+        self.panel._apply_scan(([updated, second], []), False)
+        self.assertIn("Updated identity", self.panel.selected_lbl.text())
+        self.assertEqual(self.panel.current_device(), updated)
+        self.panel._apply_scan(([second], []), False)
+        self.assertEqual(self.panel.current_device(), second)
+        self.assertIn("COM7", self.panel.selected_lbl.text())
+        self.assertTrue(any("Selected COM port: COM7" in line for line in self.logs))
+
+
+class SidebarLayoutTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_sidebar_keeps_test_controls_accessible_on_short_window(self):
+        original_style = self.app.styleSheet()
+        self.app.setStyleSheet(LIGHT_THEME)
+        with patch("core.test_runner.TestHistoryDB"), patch("core.test_runner.ReportGenerator"), patch(
+            "ui.com_port_panel.COMPortPanel.start_monitoring"
+        ):
+            window = MainWindow()
+            try:
+                window.show()
+                window.resize(1280, 720)
+                self.app.processEvents()
+                self.assertEqual(window.height(), 720)
+                scroll = window.sidebar_scroll
+                self.assertGreater(scroll.verticalScrollBar().maximum(), 0)
+                self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
+                combo = window.test_panel.profile
+                option = QStyleOptionComboBox()
+                combo.initStyleOption(option)
+                text_width = combo.style().subControlRect(
+                    QStyle.ComplexControl.CC_ComboBox, option, QStyle.SubControl.SC_ComboBoxEditField, combo
+                ).width()
+                self.assertGreaterEqual(
+                    text_width,
+                    max(combo.fontMetrics().horizontalAdvance(combo.itemText(i)) for i in range(combo.count())),
+                )
+                description = window.test_panel.suite_description
+                self.assertGreaterEqual(description.height(), description.heightForWidth(description.width()))
+                for widget in (window.test_panel.hardware_checkbox, window.test_panel.suite_description,
+                               window.test_panel.view_results_btn, window.test_panel.progress):
+                    with self.subTest(widget=widget):
+                        scroll.ensureWidgetVisible(widget, 0, 0)
+                        self.app.processEvents()
+                        position = widget.mapTo(scroll.viewport(), QPoint(0, 0))
+                        self.assertGreaterEqual(position.y(), 0)
+                        self.assertLessEqual(position.y() + widget.height(), scroll.viewport().height())
+                        self.assertGreaterEqual(position.x(), 0)
+                        self.assertLessEqual(position.x() + widget.width(), scroll.viewport().width())
+            finally:
+                window.close()
+                window.deleteLater()
+                self.app.processEvents()
+                self.app.setStyleSheet(original_style)
+
+    def test_embedded_results_and_dashboard_use_real_run_outcomes(self):
+        with patch("core.test_runner.TestHistoryDB"), patch("core.test_runner.ReportGenerator"), patch(
+            "ui.com_port_panel.COMPortPanel.start_monitoring"
+        ):
+            window = MainWindow()
+            try:
+                window.show()
+                self.app.processEvents()
+                self.assertIs(window.output_tabs.currentWidget(), window.log_panel)
+                self.assertEqual(window.log_panel.logs.palette().color(QPalette.ColorRole.Base).name(), "#000000")
+                self.assertEqual(window.log_panel.logs.palette().color(QPalette.ColorRole.Text).name(), "#ffffff")
+                self.assertIs(window.test_panel.suite_panel, window.results_panel)
+                self.assertFalse(window.toolbar.start_btn.isEnabled())
+                device = {"port": "COM6", "name": "Fixture", "authorized": "Yes"}
+                window.com_port_panel._apply_scan(([device], []), True)
+                self.assertTrue(window.toolbar.start_btn.isEnabled())
+                self.assertEqual(window.dashboard.devices_card.value.text(), "1")
+                self.assertEqual(window.dashboard.failed_card.value.text(), "0")
+                for status in ("PASS", "FAIL", "BLOCKED", "CANCELLED", "ERROR", "SKIPPED"):
+                    window.test_panel.finish_run(status)
+                self.assertEqual(window.dashboard.pass_card.value.text(), "1")
+                self.assertEqual(window.dashboard.failed_card.value.text(), "1")
+                self.assertEqual(window.dashboard.other_card.value.text(), "4")
+                self.assertEqual(window.run_status.text(), "Finished: SKIPPED")
+                window.test_panel.set_firmware_capture_active(True)
+                self.assertFalse(window.toolbar.start_btn.isEnabled())
+                window.test_panel.set_firmware_capture_active(False)
+                self.assertTrue(window.toolbar.start_btn.isEnabled())
+                with patch.object(window.test_panel.runner, "start"):
+                    window.test_panel.start_test()
+                self.assertIs(window.output_tabs.currentWidget(), window.results_panel)
+                window.test_panel.update_suite_row({
+                    "profile": "Fixture check", "status": "BLOCKED", "duration": 0,
+                    "evidence": "Unavailable", "details": ["No access"],
+                })
+                self.assertEqual(window.results_panel.table.item(0, 1).text(), "BLOCKED")
+                window.output_tabs.setCurrentWidget(window.log_panel)
+                window.test_panel.update_suite_row({
+                    "profile": "Fixture check", "status": "PASS", "duration": 1,
+                    "evidence": "Available", "details": ["Checked"],
+                })
+                self.assertIs(window.output_tabs.currentWidget(), window.log_panel)
+                window.test_panel.log_message("Log while results tab is not selected")
+                self.assertIn("Log while results tab is not selected", window.log_panel.logs.toPlainText())
+                window.test_panel.view_results_btn.click()
+                self.assertIs(window.output_tabs.currentWidget(), window.results_panel)
+                self.assertEqual(window.results_panel.table.item(0, 1).text(), "PASS")
+            finally:
+                window.close()
+                window.deleteLater()
+                self.app.processEvents()
 
 
 if __name__ == "__main__":

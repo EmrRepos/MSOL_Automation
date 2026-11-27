@@ -13,8 +13,8 @@ class Header(QLabel):
         self.setAlignment(Qt.AlignCenter)
 
         self.setStyleSheet("""
-            font-size: 22px;
+            font-size: 16pt;
             font-weight: bold;
-            color: black;
-            padding: 10px;
+            color: #243247;
+            padding: 4px;
         """)
