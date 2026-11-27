@@ -6,7 +6,7 @@ wmi
 pywin32
 PySide6
 PyQt5
-reportlab
+reportlab>=4.2
 
 # EtherNet/IP optional libraries retained from its existing requirements
 pycomm3

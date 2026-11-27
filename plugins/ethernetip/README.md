@@ -12,9 +12,11 @@ a complete implementation of the CIP specifications.
 The standalone EtherNet/IP implementation uses Python 3.10+ and the standard
 library with Tkinter. For the shared Windows environment used by both plugins,
 follow the [repository setup](../../README.md#setup) using Python 3.14 x64.
-The shared requirements also include optional EtherNet/IP libraries reserved
-for future work. Windows python.org installations normally include Tk; on
-Linux, install your distribution's Tkinter package if needed.
+install dependencies from the repository root with
+`python -m pip install -r requirements.txt`. ReportLab is required for PDF export;
+the shared requirements also include optional EtherNet/IP libraries reserved for
+future work. Windows python.org installations normally include Tk; on Linux,
+install your distribution's Tkinter package if needed.
 
 ```powershell
 .\.venv\Scripts\python.exe launcher.py ethernetip
@@ -28,17 +30,72 @@ launcher also forwards these CLI arguments, for example
 The native desktop window opens directly; there is no web server or browser URL.
 **Load sample** uses a synthetic controller at the documentation address `192.0.2.10`
 and sends no traffic. Sample evidence remains explicitly labeled in exported reports.
-The **Export JSON** dialog defaults to `reports/ethernetip` under the current
-working directory; another destination may be selected. Export is manual.
-CLI reports are saved only when `--output` is supplied; use a path such as
-`reports\ethernetip\assessment.json` to save them in the same folder.
+The **Export PDF** or **Export JSON** dialog defaults to `reports/ethernetip`
+under the current working directory; another destination may be selected.
+Export is manual. CLI reports are saved only when `--output` is supplied; use
+a `.pdf` or `.json` path, such as `reports\ethernetip\assessment.json`.
 
 For a real assessment, enter one literal unicast IPv4 address and an operator/scope
 reference. Start a manual assessment, confirm a single identity probe, or select
-**Run live suite** after attesting authorization. Select an assessment area, record a decision and supporting evidence,
-then save the review before exporting. Changing the scope requires a new assessment;
-existing evidence cannot be relabeled with another target. New assessments replace
-in-memory evidence, so export anything that must be retained.
+**Run live suite** after attesting authorization. The main screen shows **Runnable tests**
+on the left and **Live Logs** on the right, including the number of selected test operations
+finished and the current operation. Finished does not mean passed. Select a test to view a
+plain-language description and result; enable **Advanced details (raw evidence)** to
+inspect packet evidence. An **Observed** result is not a security verdict.
+
+To run one or more executable tests, click their checkboxes, or use **Ctrl+click** and
+**Shift+click** on the test rows. **Select all runnable** includes the fuzz cases;
+**Clear selection** deselects them. Click **Run selected** and confirm the target and
+tests. Fuzzing always requires separate approval. CIP and fuzz cases also perform the
+necessary session registration and cleanup; session-related cases perform those supporting
+operations as needed. The **Excel cases (46)** tab lists the workbook cases and their coverage.
+Select a case to see its limitations and any related runnable test IDs. A partial mapping
+is not a complete implementation of the workbook case; select the related IDs in the
+**Runnable tests** tab to run those operations. Manual, profile-dependent and excluded
+cases cannot be run. Open **Coverage & manual** to inspect non-executable coverage,
+manual-review and excluded rows; they cannot be selected for execution. Device applicability
+is not detected automatically. Click **Attack surface**
+next to **Load sample** to open the review window, select an area, record a decision and
+supporting evidence, and save the review before exporting. Closing the review window retains
+unsaved edits in memory; save them before export. Changing the scope requires a new assessment;
+existing evidence cannot be relabeled with another target. When replacing existing evidence,
+choose **Yes** to export it first, **No** to discard it, or **Cancel** to keep it. A cancelled
+or failed export leaves the assessment in place. Save unsaved reviews before exporting; if
+the scope was changed, restore it before exporting the previous assessment.
+
+Each selected run replaces the previous assessment, just like a full suite. Export the
+result before starting another run if it must be retained. Reports identify all selected
+cases; other cases are marked `not_run`, except for session setup and cleanup when needed.
+Fuzz cases require a separate fuzzing confirmation. If the selection mixes baseline and
+fuzz cases, the baseline runs first and fuzzing runs in a separate session after at least
+one second. Cancellation, baseline failure, or failed baseline cleanup prevents the fuzz
+phase from starting. Mixed runs use at most two sessions and 42 requests in total; each
+phase retains its own pacing and work budget.
+
+### Bounded fuzz tests
+
+Fuzzing is separate from the existing read-only live suite. In **Runnable tests**,
+click **Run fuzz tests** after entering the target and operator reference and checking
+the authorization box. Confirm the additional warning only when fuzzing that specific
+target is approved. Wait for the run to finish, inspect the `FUZ-01` through `FUZ-04`
+rows, and click **Export PDF** or **Export JSON**. Starting either suite replaces the current evidence and
+reviews, so export the previous assessment first.
+
+The four fixed cases probe class, instance and attribute boundaries and a mismatched CIP
+path length using GetAttributeSingle. Their responses are observations, not automatic
+pass/fail or vulnerability verdicts; boundary values may be valid for a particular device.
+Timeouts and disconnects are inconclusive. An operator must monitor device and process
+health and use **Stop** if necessary; this tool does not automatically monitor them.
+This is not exhaustive fuzzing or protocol conformance testing.
+
+For CLI use, from the repository root, replace the example IP with the authorized target:
+
+```powershell
+.\.venv\Scripts\python.exe .\plugins\ethernetip\main.py fuzz 192.0.2.10 --authorized --fuzz-authorized --operator "Name / approved ticket" --output "fuzz.pdf"
+```
+
+The example IP is a documentation address, not a real device. Omitting either
+authorization flag blocks the fuzz command.
 
 ## Safety Boundaries
 
@@ -60,8 +117,13 @@ in-memory evidence, so export anything that must be retained.
 	remains usable. A broken stream is closed without additional protocol requests.
 	Force-closing the application can interrupt cleanup; stop and await completion first.
 - There is no broadcast, subnet scan, automatic retry or background network polling.
+- The opt-in fuzz suite sends up to 30 total requests including session setup and cleanup,
+	with at least one second between requests, a 60-second work budget and no retries.
+	It currently sends four fuzz cases. It stops after a timeout, transport failure,
+	encapsulation rejection or malformed response. Cleanup may take an additional pacing
+	interval and request timeout. A completed run does not establish device health.
 - Write/reset/mode services, implicit I/O generation, ForwardOpen, flooding, credential
-	attacks and fuzzing are not implemented or exposed in the UI or CLI.
+	attacks and broader fuzzing are not implemented or exposed in the UI or CLI.
 - Authorization is an operator attestation, not a technical authorization enforcement
 	system. Network controls and organizational approvals remain essential.
 
@@ -115,23 +177,30 @@ python main.py coverage
 ```
 
 The coverage output also traces all 46 cases from the Gen5 baseline workbook to
-implemented read-only coverage, profile-dependent checks, manual review, or explicit
-exclusions. The two Identity-related enumeration cases are only partially covered:
+implemented read-only or partial fuzz coverage, profile-dependent checks, manual review,
+or explicit exclusions. The two Identity-related enumeration cases are only partially covered:
 the live suite reads Identity attributes 1-7 and does not establish whether that
-exposure is authorized. Writes, fuzzing, flooding, and other disruptive tests remain
-excluded; they are not made executable by appearing in the catalog.
+exposure is authorized. Only the four explicitly listed fuzz cases are executable;
+writes, flooding, and other excluded cases are not enabled by appearing in the catalog.
 
 Authorized single-target request, using a documentation address as a placeholder:
 
 ```powershell
-python main.py discover 192.0.2.10 --authorized --operator "Tester / approved ticket OT-123" --timeout 3 --output assessment.json
+python main.py discover 192.0.2.10 --authorized --operator "Tester / approved ticket OT-123" --timeout 3 --output assessment.pdf
 ```
 
 Run the bounded baseline after obtaining approval for the specific device:
 
 ```powershell
-python main.py test 192.0.2.10 --authorized --operator "Tester / approved lab ticket OT-123" --timeout 3 --output device-baseline.json
+python main.py test 192.0.2.10 --authorized --operator "Tester / approved lab ticket OT-123" --timeout 3 --output device-baseline.pdf
 ```
+
+To run selected cases instead, repeat the `--case` option, for example
+`--case CIP-03 --case CIP-04` with `test`, or `--case FUZ-01 --case FUZ-02` with
+`fuzz`. To mix baseline and fuzz cases, use the `selected` command with repeated
+`--case` options and both `--authorized` and `--fuzz-authorized`. Reports include the
+selection in reproduction arguments. Replace these examples with the cases and target
+approved for your assessment.
 
 Replace the placeholder only with an explicitly approved target. There are no live
 network tests in the test suite. Discovery failures return exit code `1` and an
@@ -139,10 +208,10 @@ inconclusive report when the supplied scope is valid; missing required authoriza
 arguments return exit code `2`. An empty identity response returns `0` for a completed
 exchange but remains inconclusive. The `assess` command does not contact a target.
 
-The `test` command returns `1` for an incomplete/cancelled suite or setup/export error
+The `test` and `fuzz` commands return `1` for an incomplete/cancelled suite or setup/export error
 and `0` when the suite traversal completes. Exit code `0` does not mean all tests ran,
 all controls passed, or no vulnerabilities exist. Inspect each case's status and any
-skipped dependencies. Authorization arguments are mandatory for both active commands.
+skipped dependencies. Authorization arguments are mandatory for active commands.
 
 ## Live Baseline Cases
 
@@ -170,16 +239,21 @@ explain them. The dynamic status attribute is not compared.
 
 Case statuses are `observed`, `unsupported`, `access_denied`, `protocol_anomaly`,
 `inconclusive` and `not_run`. A malformed response stops subsequent test operations;
-cleanup is still attempted when the encapsulation stream remains usable. The suite
+cleanup is still attempted when the encapsulation stream remains usable. The baseline suite
 does not intentionally send malformed requests or invalid attribute paths.
 No reply is specified for UnregisterSession, so the suite cannot assert remote session
 deletion. Check device logs or vendor instrumentation for that assertion.
 
 ## Evidence and Reports
 
-JSON exports include the scoped target, operator reference, authorization attestation,
-live/sample/manual mode, request timestamp (when probed), outcome, identity metadata,
-informational observations, all review decisions, limitations and reference links.
+PDF exports include the scoped target, operator reference, authorization attestation,
+live/sample/manual mode, UTC start and completion times, outcome, device identity details,
+informational observations, all review decisions, spreadsheet coverage, abbreviations,
+limitations and reference links. Times are unavailable when no timed live operation was
+recorded; a completion time includes session cleanup. **Export PDF** opens a save dialog;
+the CLI `--output` argument must end in `.pdf`. CLI standard output remains JSON for
+compatibility with existing scripts. Characters unsupported by the PDF's font are
+shown as Unicode escapes so their values are not lost.
 Live-suite reports additionally contain exact bounded request/response hex, partial
 response bytes on receive failures, UTC timestamps, timings, CIP general/additional
 status, decoded values, per-test exchange indices, consistency observations and the
@@ -195,7 +269,7 @@ behavior, source network, logs, reproducibility and any demonstrated operational
 Do not assign vulnerability severity solely because the client rejected a response.
 Only explicitly saved operator decisions are exported. Review decisions other than
 **Not assessed** require evidence or a rationale; they are not machine-verified results.
-Reports are local plaintext files without encryption or signing. Store them in an
+Reports are local files without encryption or signing. Store them in an
 approved evidence location and avoid entering passwords or other secrets in notes.
 Keep original packet captures, change approvals and inventory records separately when
 your evidence handling process requires them.
@@ -207,9 +281,10 @@ your evidence handling process requires them.
 - `modules/discovery.py`: bounded TCP ListIdentity exchange and defensive packet parser.
 - `modules/security.py`: attack-surface catalog and evidence-required review decisions.
 - `modules/live_tests.py`: bounded live suite, result classifications and coverage matrix.
+- `modules/fuzz_tests.py`: separately authorized bounded CIP boundary and malformed-path tests.
 - `core/connection.py`, `core/session.py`, `core/cip.py`: bounded encapsulation transport,
   session lifecycle, CPF/CIP parsing and allowlisted Identity reads.
-- `reports/report.py`: scoped JSON report generation.
+- `reports/report.py`, `reports/pdf.py`: scoped assessment and PDF report generation.
 - `tests/`: offline protocol, CLI, report and native desktop workflow tests.
 - Remaining module skeletons, `dos/` and `fuzzing/`: not connected to the workbench.
 
@@ -224,7 +299,8 @@ requirements. The UI and `coverage` command explicitly show these gaps:
 - CIP Security TLS/DTLS handshakes and certificate validation: manual review only.
 - CIP Safety, Motion, Sync and other specialized profiles: not implemented.
 - CVE applicability and exact firmware matching: manual review only.
-- Writes, resets, mode/firmware changes, malformed requests and exhaustion: excluded.
+- Writes, resets, mode/firmware changes and exhaustion: excluded. Fuzzing is limited
+  to the four opt-in CIP cases described above.
 - The 46 workbook cases are retained in the coverage output with SRS references,
   associated live cases, and explicit coverage limits; the workbook's generic pass/fail
   criteria are not treated as device-specific expected results.
