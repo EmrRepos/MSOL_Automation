@@ -1,0 +1,28 @@
+{
+  "name": "Example ASCII Command Device",
+  "description": "Template showing ASCII command/response testing. Replace the VID/PID in \"match\" with your device's identifiers to enable it.",
+  "match": {
+    "vid": "0000",
+    "pid": "0000"
+  },
+  "serial": {
+    "baudrate": 9600,
+    "timeout": 2
+  },
+  "commands": [
+    {
+      "name": "Firmware version query",
+      "payload": "VERSION?",
+      "append_newline": true,
+      "expect": "V",
+      "required": false,
+      "notes": "Marked optional so a non-matching reply is reported as a warning rather than a failure."
+    },
+    {
+      "name": "Status query",
+      "payload": "STATUS?",
+      "append_newline": true,
+      "required": false
+    }
+  ]
+}

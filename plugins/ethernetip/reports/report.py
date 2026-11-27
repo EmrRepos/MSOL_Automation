@@ -1,3 +1,4 @@
+import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -97,9 +98,15 @@ class ReportGenerator:
         }
 
     def save(self, path: str, report: dict) -> None:
-        if Path(path).suffix.lower() != '.pdf':
-            raise ValueError('Report output must use a .pdf extension.')
-        try:
-            save_pdf(path, report)
-        except LayoutError as exc:
-            raise ValueError(f'Could not format the PDF report: {exc}') from exc
+        destination = Path(path)
+        suffix = destination.suffix.lower()
+        if suffix not in ('.pdf', '.json'):
+            raise ValueError('Report output must use a .pdf or .json extension.')
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if suffix == '.pdf':
+            try:
+                save_pdf(str(destination), report)
+            except LayoutError as exc:
+                raise ValueError(f'Could not format the PDF report: {exc}') from exc
+        elif suffix == '.json':
+            destination.write_text(json.dumps(report, indent=2, ensure_ascii=True) + '\n', encoding='utf-8')

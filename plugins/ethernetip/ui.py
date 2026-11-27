@@ -4,6 +4,7 @@ import threading
 import tkinter as tk
 from dataclasses import asdict
 from datetime import datetime, timezone
+from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
@@ -862,8 +863,15 @@ class AssessmentApp:
         except ValueError as exc:
             messagebox.showerror('Export blocked', str(exc), parent=self.root)
             return False
+        report_directory = Path('reports', 'ethernetip').resolve()
+        try:
+            report_directory.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            messagebox.showerror('Export failed', f'Cannot create report directory: {exc}', parent=self.root)
+            return False
         path = filedialog.asksaveasfilename(parent=self.root, defaultextension='.pdf',
-                                          filetypes=[('PDF report', '*.pdf')],
+                                          filetypes=[('PDF report', '*.pdf'), ('JSON report', '*.json')],
+                                          initialdir=str(report_directory),
                                           initialfile=f'ethernet-ip-{self.mode}-{self.scope_target}.pdf')
         if path:
             try:

@@ -19,13 +19,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--fuzz-authorized', action='store_true', help='Separately attest authorization for active fuzz testing')
     parser.add_argument('--operator', help='Operator name and scope/ticket reference')
     parser.add_argument('--timeout', type=float, default=3.0, help='Total request deadline, 0.2 to 5 seconds')
-    parser.add_argument('--output', help='PDF report path (discover, test, fuzz or selected)')
+    parser.add_argument('--output', help='PDF or JSON report path (discover, test, fuzz or selected)')
     parser.add_argument('--case', action='append', help='Executable test ID; repeat for multiple cases')
     args = parser.parse_args(argv)
     if args.case is not None and args.command not in ('test', 'fuzz', 'selected'):
         parser.error('--case is available only for test, fuzz or selected')
-    if args.output and Path(args.output).suffix.lower() != '.pdf':
-        parser.error('--output must use a .pdf extension')
+    if args.output and Path(args.output).suffix.lower() not in ('.pdf', '.json'):
+        parser.error('--output must use a .pdf or .json extension')
     if args.command == 'gui':
         from ui import launch
         launch()

@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,15 +38,18 @@ class SecurityTests(unittest.TestCase):
         self.assertIn('Does not establish', result[0]['limits'])
         self.assertEqual(assessment.catalog()[0]['status'], 'Not assessed')
 
-    def test_pdf_report_and_sample_label(self):
+    def test_pdf_and_json_reports_and_sample_label(self):
         generator = ReportGenerator()
         report = generator.build('192.0.2.10', 'Lab / ticket 123', False, 'sample',
                                  'Synthetic data', parse_identity_payload(identity_payload()),
                                  SecurityAssessment())
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / 'report.pdf'
-            generator.save(str(path), report)
-            self.assertTrue(path.read_bytes().startswith(b'%PDF-'))
+            pdf_path = Path(directory) / 'report.pdf'
+            generator.save(str(pdf_path), report)
+            self.assertTrue(pdf_path.read_bytes().startswith(b'%PDF-'))
+            json_path = Path(directory) / 'reports' / 'ethernetip' / 'report.json'
+            generator.save(str(json_path), report)
+            self.assertEqual(json.loads(json_path.read_text(encoding='utf-8')), report)
         with patch('reports.pdf.SimpleDocTemplate') as document:
             generator.save('report.pdf', report)
         story = document.return_value.build.call_args.args[0]
@@ -86,9 +90,9 @@ class SecurityTests(unittest.TestCase):
         self.assertIn(run['evidence_sha256'], content)
         self.assertIn(run['exchanges'][0]['request_hex'], content)
 
-    def test_report_rejects_non_pdf_extension(self):
-        with self.assertRaisesRegex(ValueError, 'pdf extension'):
-            ReportGenerator().save('report.json', {})
+    def test_report_rejects_unsupported_extension(self):
+        with self.assertRaisesRegex(ValueError, 'pdf or .json extension'):
+            ReportGenerator().save('report.txt', {})
 
     def test_pdf_preserves_unsupported_unicode_as_escaped_text(self):
         report = ReportGenerator().build('192.0.2.10', 'Lab \u0915 / ticket', False, 'sample',

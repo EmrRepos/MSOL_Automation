@@ -1,4 +1,0 @@
-pycomm3
-scapy
-rich
-reportlab>=4.2

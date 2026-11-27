@@ -1,0 +1,49 @@
+usb_lab/
+│
+├── main.py
+├── database.py
+├── device_manager.py
+├── test_runner.py
+├── report_generator.py
+│
+├── plugins/
+│   ├── base.py
+│   ├── descriptor_test.py
+│   └── stress_test.py
+│
+├── reports/
+├── logs/
+└── ui/
+    ├── main_window.py
+    ├── device_panel.py
+    ├── log_panel.py
+    └── test_panel.py
+
+
+
+Security Frameworks Mapping for USB to new NPD - CRA, IEC 62443 4-2, NIST
+
+✅ Descriptor Validation
+✅ Enumeration Validation
+✅ CDC Validation (because you're already showing COM ports)
+✅ HID Validation
+✅ Storage Validation
+✅ Reconnect Validation
+✅ Stability Validation
+✅ Endpoint Validation
+
+
+
+✅ Enumeration Stress Test
+
+Then:
+
+✅ Descriptor Robustness Test
+
+Then:
+
+✅ CDC Security Review
+
+Then:
+
+✅ HID Attack Surface Review

@@ -1,0 +1,10 @@
+{
+  "name": "Generic Serial Device",
+  "description": "Fallback profile. Verifies the port can be opened and captures any unsolicited data. Sends nothing, so it is safe for unknown devices.",
+  "default": true,
+  "serial": {
+    "baudrate": 115200,
+    "timeout": 2
+  },
+  "commands": []
+}

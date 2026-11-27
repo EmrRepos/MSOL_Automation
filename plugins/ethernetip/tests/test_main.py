@@ -40,23 +40,31 @@ class CLITests(unittest.TestCase):
         self.assertEqual(report['scope']['mode'], 'live')
         self.assertEqual(report['identities'][0]['product_name'], 'Lab PLC')
 
-    def test_cli_exports_pdf_and_rejects_json_before_network(self):
-        output = io.StringIO()
+    def test_cli_exports_pdf_and_json_and_rejects_unsupported_extension(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / 'device.pdf'
+            pdf_path = Path(directory) / 'device.pdf'
+            output = io.StringIO()
             with redirect_stdout(output), patch(
                 'main.Discovery.discover', return_value=parse_identity_payload(identity_payload())
             ):
                 code = main(['discover', '192.0.2.10', '--authorized', '--operator', 'Lab / ticket',
-                             '--output', str(path)])
+                             '--output', str(pdf_path)])
             self.assertEqual(code, 0)
-            self.assertTrue(path.read_bytes().startswith(b'%PDF-'))
+            self.assertTrue(pdf_path.read_bytes().startswith(b'%PDF-'))
             report = json.loads(output.getvalue())
             self.assertIsNotNone(report['scope']['completed_at_utc'])
+            json_path = Path(directory) / 'reports' / 'ethernetip' / 'discovery.json'
+            with redirect_stdout(io.StringIO()), patch(
+                'main.Discovery.discover', return_value=parse_identity_payload(identity_payload())
+            ):
+                code = main(['discover', '192.0.2.10', '--authorized', '--operator', 'Lab / ticket',
+                             '--output', str(json_path)])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(json_path.read_text(encoding='utf-8'))['scope']['mode'], 'live')
         with redirect_stderr(io.StringIO()), patch('main.Discovery.discover') as discover:
             with self.assertRaises(SystemExit):
                 main(['discover', '192.0.2.10', '--authorized', '--operator', 'Lab',
-                      '--output', 'device.json'])
+                      '--output', 'device.txt'])
             discover.assert_not_called()
 
     def test_network_failure_is_inconclusive(self):

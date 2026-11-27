@@ -9,19 +9,31 @@ a complete implementation of the CIP specifications.
 
 ## Run
 
-Use Python 3.10+ with Tkinter available. PDF export requires ReportLab; install the
-plugin requirements once with `python -m pip install -r requirements.txt` from this
-directory. The other listed libraries are reserved for future work. Windows python.org
-installations normally include Tk. On Linux, install your distribution's Tkinter
-package if needed.
+The standalone EtherNet/IP implementation uses Python 3.10+ and the standard
+library with Tkinter. For the shared Windows environment used by both plugins,
+follow the [repository setup](../../README.md#setup) using Python 3.14 x64.
+install dependencies from the repository root with
+`python -m pip install -r requirements.txt`. ReportLab is required for PDF export;
+the shared requirements also include optional EtherNet/IP libraries reserved for
+future work. Windows python.org installations normally include Tk; on Linux,
+install your distribution's Tkinter package if needed.
 
 ```powershell
-python main.py
+.\.venv\Scripts\python.exe launcher.py ethernetip
 ```
+
+Run this command from the repository root. The standalone `python main.py`
+command and CLI examples below are run from `plugins\ethernetip`; the root
+launcher also forwards these CLI arguments, for example
+`.\.venv\Scripts\python.exe launcher.py ethernetip coverage`.
 
 The native desktop window opens directly; there is no web server or browser URL.
 **Load sample** uses a synthetic controller at the documentation address `192.0.2.10`
 and sends no traffic. Sample evidence remains explicitly labeled in exported reports.
+The **Export PDF** or **Export JSON** dialog defaults to `reports/ethernetip`
+under the current working directory; another destination may be selected.
+Export is manual. CLI reports are saved only when `--output` is supplied; use
+a `.pdf` or `.json` path, such as `reports\ethernetip\assessment.json`.
 
 For a real assessment, enter one literal unicast IPv4 address and an operator/scope
 reference. Start a manual assessment, confirm a single identity probe, or select
@@ -66,7 +78,7 @@ Fuzzing is separate from the existing read-only live suite. In **Runnable tests*
 click **Run fuzz tests** after entering the target and operator reference and checking
 the authorization box. Confirm the additional warning only when fuzzing that specific
 target is approved. Wait for the run to finish, inspect the `FUZ-01` through `FUZ-04`
-rows, and click **Export PDF**. Starting either suite replaces the current evidence and
+rows, and click **Export PDF** or **Export JSON**. Starting either suite replaces the current evidence and
 reviews, so export the previous assessment first.
 
 The four fixed cases probe class, instance and attribute boundaries and a mismatched CIP
@@ -82,8 +94,8 @@ For CLI use, from the repository root, replace the example IP with the authorize
 .\.venv\Scripts\python.exe .\plugins\ethernetip\main.py fuzz 192.0.2.10 --authorized --fuzz-authorized --operator "Name / approved ticket" --output "fuzz.pdf"
 ```
 
-The output directory must already exist. The example IP is a documentation address, not a
-real device. Omitting either authorization flag blocks the fuzz command.
+The example IP is a documentation address, not a real device. Omitting either
+authorization flag blocks the fuzz command.
 
 ## Safety Boundaries
 
@@ -316,7 +328,9 @@ needs its own isolated-lab scope, resource limits, instrumentation and recovery 
 ## Verification
 
 ```powershell
+Push-Location plugins\ethernetip
 python -m unittest discover -s tests -v
+Pop-Location
 ```
 
 The tests use synthetic packets and mocked sockets. Native Tkinter UI tests need a
