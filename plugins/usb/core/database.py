@@ -1,16 +1,27 @@
+import os
 import sqlite3
+import sys
+from pathlib import Path
+
+
+def history_database_path():
+    if getattr(sys, "frozen", False):
+        return Path(os.environ["LOCALAPPDATA"]) / "USB_Pentest_Framework" / "usb_tests.db"
+    return Path(__file__).resolve().parent.parent / "usb_tests.db"
 
 
 class TestHistoryDB:
 
     def __init__(self):
 
+        self.path = history_database_path()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.create_tables()
 
     def create_tables(self):
 
         conn = sqlite3.connect(
-            "usb_tests.db"
+            self.path
         )
 
         cur = conn.cursor()
@@ -43,7 +54,7 @@ class TestHistoryDB:
     ):
 
         conn = sqlite3.connect(
-            "usb_tests.db"
+            self.path
         )
 
         cur = conn.cursor()

@@ -773,6 +773,7 @@ class SuiteRunnerAndUITests(unittest.TestCase):
                     patch("core.test_suite.refresh_device", side_effect=lambda device: dict(device)),
                     patch("core.test_suite.hardware_helpers.read_descriptors", return_value=(True, DESCRIPTORS)),
                     patch("core.test_suite.hardware_helpers.cdc_check", return_value=(True, "port_accessible")),
+                    patch("core.database.history_database_path", return_value=Path(folder) / "usb_tests.db"),
                 ):
                     # Pass the injected refresh explicitly because default args are bound at definition time.
                     original = ApplicableSuite

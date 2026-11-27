@@ -1,9 +1,14 @@
 import ast
 import importlib
+import os
+import sqlite3
+import tempfile
+from contextlib import closing
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
-from core import device_profile
+from core import database, device_profile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +43,42 @@ class ProjectLayoutTests(unittest.TestCase):
         profiles = device_profile.load_profiles()
         self.assertTrue(profiles)
         self.assertIn("generic_serial.json", {profile["_source"] for profile in profiles})
+
+    def test_source_history_uses_usb_directory_from_any_working_directory(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            usb = root / "plugins" / "usb"
+            core = usb / "core"
+            core.mkdir(parents=True)
+            target = usb / "usb_tests.db"
+            old_database = root / "usb_tests.db"
+            old_database.write_bytes(b"existing history")
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(root)
+                with patch.object(database, "__file__", str(core / "database.py")), \
+                     patch.object(database.sys, "frozen", False, create=True):
+                    history = database.TestHistoryDB()
+                    history.save_result("first", "device", "profile", "PASS")
+                    second = database.TestHistoryDB()
+                    second.save_result("second", "device", "profile", "FAIL")
+                self.assertEqual(history.path, target)
+                self.assertEqual(old_database.read_bytes(), b"existing history")
+                with closing(sqlite3.connect(target)) as connection:
+                    self.assertEqual(connection.execute("SELECT COUNT(*) FROM test_history").fetchone()[0], 2)
+            finally:
+                os.chdir(old_cwd)
+
+    def test_frozen_history_uses_persistent_local_app_data(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(database.sys, "frozen", True, create=True), \
+                 patch.dict(os.environ, {"LOCALAPPDATA": folder}):
+                history = database.TestHistoryDB()
+                history.save_result("now", "device", "profile", "PASS")
+            target = Path(folder) / "USB_Pentest_Framework" / "usb_tests.db"
+            self.assertEqual(history.path, target)
+            with closing(sqlite3.connect(target)) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM test_history").fetchone()[0], 1)
 
     def test_no_source_imports_removed_root_modules(self):
         sources = [ROOT / "main.py"]

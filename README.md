@@ -94,9 +94,11 @@ When launched from the repository root, default report locations are:
 | USB | `reports\usb` | Automated tests save PDF and CSV reports. The Report Center can open them. |
 | EtherNet/IP | `reports\ethernetip` | The UI export dialog defaults here; saving a PDF or JSON report is manual. |
 
-USB test history is stored in `usb_tests.db` in the working directory. Report
-paths are relative to the directory from which the launcher is run. Protect
-reports, logs and captures: they may contain device or assessment information.
+For source runs, USB test history is stored in `plugins\usb\usb_tests.db`,
+regardless of the launch directory. An existing root `usb_tests.db` is not
+moved or merged automatically. Report paths are relative to the directory from
+which the launcher is run. Protect history, reports, logs and captures: they
+may contain device or assessment information.
 
 Interpret results in context: **BLOCKED**, **SKIPPED**, **ERROR** and
 **CANCELLED** are not passes. EtherNet/IP observations, timeouts and incomplete

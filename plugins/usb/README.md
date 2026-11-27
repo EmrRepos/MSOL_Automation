@@ -39,8 +39,8 @@ py -3.14 setup_environment.py
 
 These commands use the virtual environment directly; activation and PowerShell
 execution-policy changes are not required. Automated reports are saved in
-`reports/usb` under the current working directory, and history uses that
-working directory; device profiles are loaded from this plugin's directory.
+`reports/usb` under the current working directory. Source-run history and device
+profiles are stored under this plugin's directory.
 For Windows executable builds and their different data location, see the
 [repository release instructions](../../README.md#build-windows-executables).
 
@@ -239,9 +239,12 @@ Export errors are explicitly logged.
 
 ## 8. Test History
 
-Automated test summaries are stored locally in the SQLite database `usb_tests.db`,
-including timestamp, device name, profile and result. Standard validation adds
-one suite summary; detailed evidence remains in its reports.
+For source runs, automated test summaries are stored in `plugins/usb/usb_tests.db`,
+regardless of the working directory. The packaged executable uses
+`%LOCALAPPDATA%\USB_Pentest_Framework\usb_tests.db`. Existing root databases
+are not moved or merged automatically. History includes timestamp, device name,
+profile and result. Standard validation adds one suite summary; detailed
+evidence remains in its reports.
 
 Manual Serial Console sessions and offline packet analysis do not create
 automated test-history entries. Keep the database and required reports when
